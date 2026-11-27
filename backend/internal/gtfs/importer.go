@@ -345,63 +345,77 @@ var VizagPublicRouteNumbers = map[string]string{
 	"gk11-kottavalasa-scindia":      "55K",
 	"bo43-devarapalle-scindia":      "55D",
 	"j082-scindia-simhachalam":      "55",
+	"j011-scindia-simhachalam-hill": "55",
 	"bo47-gwk-depot-tagarapuvalasa": "55T",
 	"bo23-pendurthi-tagarapuvalasa": "55T",
 
 	// 400 series
 	"co71-old-gajuwaka-rtc-complex-vsp":     "400",
 	"jn04-rtc-complex-vsp-vadachipurapalli": "400N",
-	"k151-rtc-complex-vsp-yelamanchili":     "400Y",
 	"jp01-old-gajuwaka-vizianagaram":        "411V",
 
 	// 38 series
-	"do01-duvvada-rtc-complex-vsp":        "38Y",
-	"ds03-kurmannapalem-rtc-complex-vsp":  "38",
-	"ao81-nadupuru-part-rtc-complex-vsp":  "38D",
-	"jn01-rtc-complex-vsp-sector-5":       "38K",
+	"do01-duvvada-rtc-complex-vsp":             "38Y",
+	"ds03-kurmannapalem-rtc-complex-vsp":       "38",
+	"ao81-nadupuru-part-rtc-complex-vsp":       "38D",
+	"jn01-rtc-complex-vsp-sector-5":            "38K",
+	"go01-gantyada-hb-colony-rtc-complex-vsp":  "38H",
+	"jo71-gantyada-hb-colony-rtc-complex-vsp":  "38H",
 
 	// 500 series
-	"la24-anakapalli-rtc-complex-vsp": "500",
+	"la24-anakapalli-rtc-complex-vsp":    "500",
+	"jn65-anakapalli-rtc-complex-vsp":    "500",
+	"k151-rtc-complex-vsp-yelamanchili":  "500Y",
 
 	// 99 & 900 series
-	"or92-old-gajuwaka-r-k-beach":            "99",
+	"or92-old-gajuwaka-r-k-beach":             "99",
+	"bm06-maddilapalem-railway-station-vsp":   "900",
 	"a033-bheemunipatnam-railway-station-vsp": "900K",
-	"k121-bheemunipatnam-rtc-complex-vsp":    "999",
+	"k121-bheemunipatnam-rtc-complex-vsp":     "999",
 
 	// 6 series
-	"b011-rtc-complex-vsp-simhachalam":          "6A",
-	"gy01-rtc-complex-vsp-simhachalam-hill":     "6A/H",
+	"ao21-old-head-post-office-simhachalam":      "6",
+	"ao31-dabbanda-old-head-post-office":         "6D",
+	"b011-rtc-complex-vsp-simhachalam":           "6A",
+	"gy01-rtc-complex-vsp-simhachalam-hill":      "6A/H",
 	"ao22-old-head-post-office-simhachalam-hill": "6H",
 
 	// 10, 12, 14 series
 	"gv99-kailasagiri-rtc-complex-vsp":       "10K",
 	"dv05-devarapalle-rtc-complex-vsp":       "12D",
 	"gc21-old-head-post-office-venkojipalem": "14",
+	"a221-arilova-colony-old-head-post-office": "14A",
 
 	// 25 series
-	"ng02-town-koth-raod-vambay-colony":             "25D/V",
+	"ng02-town-koth-raod-vambay-colony":              "25D/V",
+	"sv01-railway-station-vsp-seva-nagar":            "25J",
 	"pp20-old-head-post-office-pothinamallayyapalem": "25P",
 
 	// 28 series
 	"kv03-pendurthi-r-k-beach":        "28A",
 	"g035-kottavalasa-r-k-beach":      "28K",
+	"f016-r-k-beach-sabbavaram":       "28P",
 	"f017-r-k-beach-simhachalam-hill": "28Z/H",
 
 	// 48, 52, 60, 69 series
 	"ch03-madhavadhara-vuda-colony-old-head-post-office": "48A",
 	"a011-old-head-post-office-ravindranagar":           "52D",
+	"a024-old-head-post-office-sagarnagar":              "52S",
 	"a232-arilova-colony-old-head-post-office":          "60C",
 	"ar04-arilova-colony-railway-station-vsp":           "69",
 
 	// Regional & connecting series
-	"s056-simhachalam-vizianagaram":                             "101",
+	"s056-simhachalam-vizianagaram":                             "700",
 	"vz13-kurmannapalem-vizianagaram":                           "111V",
 	"dv01-srungavarapu-kota-vizianagaram":                       "122",
 	"9191-anakapalli-vizianagaram":                              "205",
+	"it02-railway-station-vsp-vizianagaram":                     "211",
+	"bm02-rtc-complex-vsp-tagarapu-valasa-citybus-stop":         "222",
 	"tv03-railway-station-vsp-tagarapu-valasa-citybus-stop":     "222R",
 	"rj01-rtc-complex-vsp-vizianagaram":                         "222V",
 	"ch15-chodavaram-rtc-complex-vsp":                           "300C",
-	"f016-r-k-beach-sabbavaram":                                 "300N",
+	"9092-madugula-rtc-complex-vsp":                             "300M",
+	"mg83-madugula-rtc-complex-vsp":                             "300M",
 	"cd02-chodavaram-scindia":                                   "311",
 	"g009-kottavalasa-maddilapalem":                             "541",
 	"kv07-maddilapalem-padmanabham":                             "541P",
