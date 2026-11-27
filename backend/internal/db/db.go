@@ -158,6 +158,16 @@ CREATE TABLE IF NOT EXISTS vehicles (
 );
 
 CREATE INDEX IF NOT EXISTS idx_vehicles_route ON vehicles(route_id);
+
+CREATE TABLE IF NOT EXISTS passenger_reports (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	kind TEXT NOT NULL,
+	route_id TEXT NOT NULL DEFAULT '',
+	stop_id TEXT NOT NULL DEFAULT '',
+	vehicle_id TEXT NOT NULL DEFAULT '',
+	note TEXT NOT NULL DEFAULT '',
+	created_at INTEGER NOT NULL
+);
 `
 	_, err := conn.Exec(schema)
 	return err

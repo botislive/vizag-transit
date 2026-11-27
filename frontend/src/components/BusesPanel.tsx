@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Bus, ChevronRight, Search } from 'lucide-react';
-import type { Freshness, Vehicle } from '../types/transit';
+import type { Freshness, Language, NavTab, Vehicle } from '../types/transit';
 import { formatRelativeAge } from '../lib/format';
+import { DirectoryTabs } from './ui/DirectoryTabs';
 import { RouteBadge, StatusBadge } from './ui/StatusBadge';
 
 interface BusesPanelProps {
   vehiclesMap: Map<string, Vehicle>;
+  lang?: Language;
   onSelectVehicle: (vehicleId: string) => void;
+  onSwitchTab?: (tab: NavTab) => void;
 }
 
 type FilterMode = 'all' | 'fresh' | 'aging';
@@ -17,7 +20,7 @@ const FRESHNESS_ORDER: Record<Freshness, number> = {
   stale: 2,
 };
 
-export function BusesPanel({ vehiclesMap, onSelectVehicle }: BusesPanelProps) {
+export function BusesPanel({ vehiclesMap, lang = 'en', onSelectVehicle, onSwitchTab }: BusesPanelProps) {
   const [filter, setFilter] = useState('');
   const [mode, setMode] = useState<FilterMode>('all');
 
@@ -60,7 +63,15 @@ export function BusesPanel({ vehiclesMap, onSelectVehicle }: BusesPanelProps) {
   return (
     <div className="flex h-full flex-col">
       <div className="space-y-3 border-b border-[#E5E7EB] bg-white/80 p-4 dark:border-neutral-800 dark:bg-neutral-950/80">
-        <div className="flex min-h-[40px] items-center gap-2 rounded-xl border border-[#E5E7EB] bg-[#F5F6F8] px-3 py-1.5 focus-within:border-[#176B52] focus-within:bg-white dark:border-neutral-800 dark:bg-neutral-900 dark:focus-within:bg-neutral-900">
+        {onSwitchTab && (
+          <DirectoryTabs
+            active="buses"
+            lang={lang}
+            liveBusCount={counts.fresh}
+            onSwitch={onSwitchTab}
+          />
+        )}
+        <div className="flex min-h-[44px] items-center gap-2 rounded-xl border border-[#E5E7EB] bg-[#F5F6F8] px-3 py-1.5 focus-within:border-[#176B52] focus-within:bg-white dark:border-neutral-800 dark:bg-neutral-900 dark:focus-within:bg-neutral-900">
           <Search className="h-4 w-4 shrink-0 text-[#737373]" aria-hidden="true" />
           <input
             type="text"

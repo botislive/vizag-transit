@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -74,6 +75,13 @@ func TestAPIWithEmptyDBAndEndpoints(t *testing.T) {
 		t.Fatalf("unexpected journeys: %+v", jResp.Journeys)
 	}
 
+	// Test GET /api/stops/s1 never returns null for liveArrivals
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/stops/s1", nil))
+	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), `"liveArrivals":null`) {
+		t.Fatalf("GET /api/stops/s1 unexpected liveArrivals: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+
 	// Test GET / serves embedded index.html
 	rec = httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
@@ -124,5 +132,22 @@ func TestAPIWithEmptyDBAndEndpoints(t *testing.T) {
 	h.ServeHTTP(rec, req)
 	if rec.Header().Get("X-Robots-Tag") != "noindex, nofollow" {
 		t.Fatalf("expected X-Robots-Tag: noindex, nofollow for .onrender.com, got %q", rec.Header().Get("X-Robots-Tag"))
+	}
+
+	// Test Telugu / Landmark alias search
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/search?q=rk%20beach", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "R.K.Beach") {
+		t.Fatalf("expected alias search rk beach -> R.K.Beach, got %s", rec.Body.String())
+	}
+
+	// Test POST /api/reports
+	repBody := bytes.NewBufferString(`{"kind":"bus_did_not_arrive","routeId":"r1","stopId":"s1","note":"waited 20m"}`)
+	repReq := httptest.NewRequest(http.MethodPost, "/api/reports", repBody)
+	repReq.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, repReq)
+	if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), "recorded_unverified") {
+		t.Fatalf("POST /api/reports failed: status=%d body=%s", rec.Code, rec.Body.String())
 	}
 }

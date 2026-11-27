@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, ChevronRight, Search } from 'lucide-react';
 import { api } from '../lib/api';
-import type { CatalogueEntry } from '../types/transit';
+import type { CatalogueEntry, Language, NavTab } from '../types/transit';
+import { DirectoryTabs } from './ui/DirectoryTabs';
 import { RouteBadge } from './ui/StatusBadge';
 
 interface RoutesPanelProps {
+  lang?: Language;
+  liveBusCount?: number;
   onSelectRoute: (routeId: string) => void;
+  onSwitchTab?: (tab: NavTab) => void;
 }
 
 const CLASSIFICATION_FILTERS = [
@@ -14,7 +18,12 @@ const CLASSIFICATION_FILTERS = [
   { id: 'vizag_regional', label: 'Regional' },
 ] as const;
 
-export function RoutesPanel({ onSelectRoute }: RoutesPanelProps) {
+export function RoutesPanel({
+  lang = 'en',
+  liveBusCount = 0,
+  onSelectRoute,
+  onSwitchTab,
+}: RoutesPanelProps) {
   const [classification, setClassification] = useState<string>('all');
   const [filter, setFilter] = useState('');
   const [catalogue, setCatalogue] = useState<CatalogueEntry[]>([]);
@@ -52,9 +61,18 @@ export function RoutesPanel({ onSelectRoute }: RoutesPanelProps) {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Search & Simple Filter */}
-      <div className="space-y-3 border-b border-[#E5E7EB] bg-white p-4 dark:border-neutral-800 dark:bg-neutral-950">
-        <div className="flex min-h-[42px] items-center gap-2 rounded-xl border border-[#E5E7EB] bg-[#F5F6F8] px-3 py-1.5 focus-within:border-[#176B52] focus-within:bg-white dark:border-neutral-800 dark:bg-neutral-900 dark:focus-within:bg-neutral-900">
+      {/* Directory Switcher + Search & Filter */}
+      <div className="space-y-2.5 border-b border-[#E5E7EB] bg-white p-4 dark:border-neutral-800 dark:bg-neutral-950">
+        {onSwitchTab && (
+          <DirectoryTabs
+            active="routes"
+            lang={lang}
+            liveBusCount={liveBusCount}
+            onSwitch={onSwitchTab}
+          />
+        )}
+
+        <div className="flex min-h-[44px] items-center gap-2 rounded-xl border border-[#E5E7EB] bg-[#F5F6F8] px-3 py-1.5 focus-within:border-[#176B52] focus-within:bg-white dark:border-neutral-800 dark:bg-neutral-900 dark:focus-within:bg-neutral-900">
           <Search className="h-4 w-4 shrink-0 text-[#737373]" aria-hidden="true" />
           <input
             type="text"
@@ -72,7 +90,7 @@ export function RoutesPanel({ onSelectRoute }: RoutesPanelProps) {
               <button
                 key={f.id}
                 onClick={() => setClassification(f.id)}
-                className={`min-h-[34px] rounded-lg px-3 py-1 text-xs font-medium transition ${
+                className={`min-h-[36px] rounded-lg px-3 py-1 text-xs font-medium transition ${
                   classification === f.id
                     ? 'bg-[#176B52] text-white'
                     : 'bg-[#F5F6F8] text-[#737373] hover:text-[#171717] dark:bg-neutral-900 dark:text-neutral-400'
@@ -108,10 +126,10 @@ export function RoutesPanel({ onSelectRoute }: RoutesPanelProps) {
             <div className="flex min-w-0 flex-1 items-center gap-3">
               <RouteBadge number={entry.routeNumber} size="md" />
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 text-sm font-semibold text-[#171717] dark:text-neutral-100">
-                  <span className="truncate">{entry.origin || 'Origin'}</span>
+                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm leading-snug font-semibold text-[#171717] dark:text-neutral-100">
+                  <span>{entry.origin || 'Origin'}</span>
                   <ArrowRight className="h-3.5 w-3.5 shrink-0 text-[#737373]" aria-hidden="true" />
-                  <span className="truncate">{entry.destination || 'Destination'}</span>
+                  <span>{entry.destination || 'Destination'}</span>
                 </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-[#737373]">
                   <span>{entry.totalStops} stops</span>

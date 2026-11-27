@@ -183,7 +183,8 @@ func (s *Server) resolveStops(ctx context.Context, param string) ([]candidateSto
 		return out, nil
 	}
 
-	rows, err := s.db.QueryContext(ctx, `SELECT stop_id, name, lat, lon FROM stops WHERE in_vizag = 1 AND name LIKE ? LIMIT 5`, "%"+param+"%")
+	resolved := resolveSearchQuery(param)
+	rows, err := s.db.QueryContext(ctx, `SELECT stop_id, name, lat, lon FROM stops WHERE in_vizag = 1 AND name LIKE ? LIMIT 5`, "%"+resolved+"%")
 	if err != nil {
 		return nil, err
 	}

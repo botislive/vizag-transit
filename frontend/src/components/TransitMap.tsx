@@ -9,6 +9,7 @@ import {
   Plus,
   RotateCcw,
   Sun,
+  Wifi,
   X,
 } from 'lucide-react';
 import type { FeedStatus, RouteDetail, Selection, StopItem, Vehicle } from '../types/transit';
@@ -21,6 +22,7 @@ interface TransitMapProps {
   selection: Selection;
   userLocation: { lat: number; lon: number } | null;
   dark: boolean;
+  lowDataMode?: boolean;
   feedStatus: FeedStatus;
   sseConnected: boolean;
   onToggleTheme: () => void;
@@ -190,6 +192,7 @@ export function TransitMap({
   selection,
   userLocation,
   dark,
+  lowDataMode = false,
   feedStatus,
   sseConnected,
   onToggleTheme,
@@ -211,8 +214,11 @@ export function TransitMap({
   const darkRef = useRef(dark);
   darkRef.current = dark;
 
+  const lowDataRef = useRef(lowDataMode);
+  lowDataRef.current = lowDataMode;
+
   const satelliteRef = useRef(satellite);
-  satelliteRef.current = satellite;
+  satelliteRef.current = satellite && !lowDataMode;
 
   const callbacksRef = useRef({ onSelectVehicle, onSelectStop });
   callbacksRef.current = { onSelectVehicle, onSelectStop };
@@ -244,6 +250,12 @@ export function TransitMap({
       minZoom: 9.5,
       maxZoom: 17.5,
       attributionControl: { compact: true },
+    });
+
+    // Keep compact attribution collapsed unless explicitly tapped so it never overlaps mobile dock/disclaimer
+    requestAnimationFrame(() => {
+      const attrib = containerRef.current?.querySelector('.maplibregl-ctrl-attrib');
+      attrib?.classList.remove('maplibregl-compact-show');
     });
 
     mapRef.current = map;
@@ -680,24 +692,25 @@ export function TransitMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loadedRef.current) return;
-    const maxZ = satellite ? 17 : 17.5;
+    const useSat = satellite && !lowDataMode;
+    const maxZ = useSat ? 17 : 17.5;
     map.setMaxZoom(maxZ);
     if (map.getZoom() > maxZ) {
       map.zoomTo(maxZ, { duration: 200 });
     }
-    if (satellite) {
+    if (useSat) {
       map.setStyle(getSatelliteStyle());
     } else if (fallbackActiveRef.current) {
       map.setStyle(getFallbackRasterStyle(dark));
     } else {
       map.setStyle(getMapStyle(dark));
     }
-  }, [dark, satellite]);
+  }, [dark, satellite, lowDataMode]);
 
   const prevCoordsRef = useRef<Map<string, { lat: number; lon: number }>>(new Map());
   const animFrameRef = useRef<number | null>(null);
 
-  // Incremental vehicle updates with restrained interpolation
+  // Incremental vehicle updates with restrained interpolation (disabled in lowDataMode)
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !loadedRef.current) return;
@@ -710,17 +723,19 @@ export function TransitMap({
     const startCoords = new Map<string, { lat: number; lon: number }>();
     let needsAnim = false;
 
-    for (const [id, v] of vehiclesMap.entries()) {
-      const prev = prevCoordsRef.current.get(id);
-      if (
-        prev &&
-        v.freshness === 'fresh' &&
-        (prev.lat !== v.lat || prev.lon !== v.lon) &&
-        Math.abs(prev.lat - v.lat) < 0.015 &&
-        Math.abs(prev.lon - v.lon) < 0.015
-      ) {
-        startCoords.set(id, prev);
-        needsAnim = true;
+    if (!lowDataMode) {
+      for (const [id, v] of vehiclesMap.entries()) {
+        const prev = prevCoordsRef.current.get(id);
+        if (
+          prev &&
+          v.freshness === 'fresh' &&
+          (prev.lat !== v.lat || prev.lon !== v.lon) &&
+          Math.abs(prev.lat - v.lat) < 0.015 &&
+          Math.abs(prev.lon - v.lon) < 0.015
+        ) {
+          startCoords.set(id, prev);
+          needsAnim = true;
+        }
       }
     }
 
@@ -777,7 +792,7 @@ export function TransitMap({
         animFrameRef.current = null;
       }
     };
-  }, [vehiclesMap, selection, selectedRoute]);
+  }, [vehiclesMap, selection, selectedRoute, lowDataMode]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -845,8 +860,8 @@ export function TransitMap({
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
 
-      {/* TOP-CENTER LIVE STATUS PILL */}
-      <div className="pointer-events-none fixed top-3.5 left-1/2 z-10 flex -translate-x-1/2 flex-col items-center gap-2">
+      {/* TOP-CENTER LIVE STATUS PILL (offset cleanly clear of header at 768px md:) */}
+      <div className="pointer-events-none fixed top-3.5 left-1/2 z-10 flex -translate-x-1/2 flex-col items-center gap-2 md:left-[398px] md:translate-x-0 lg:left-1/2 lg:-translate-x-1/2">
         <div
           role="status"
           title={feedStatus.feedTimestamp > 0 ? `Updated ${formatRelativeAge(feedAge)}` : undefined}
@@ -880,7 +895,7 @@ export function TransitMap({
             <span className="font-mono-num rounded-md bg-[#176B52] px-2 py-0.5 text-xs font-bold text-white">
               {selectedRoute.route.shortName}
             </span>
-            <span className="max-w-[160px] truncate text-xs font-medium text-[#171717] sm:max-w-[260px] dark:text-neutral-100">
+            <span className="max-w-[calc(100vw-130px)] text-xs leading-tight font-medium text-[#171717] sm:max-w-[380px] dark:text-neutral-100">
               {selectedRoute.route.longName}
             </span>
             {onClearRoute && (
@@ -897,10 +912,10 @@ export function TransitMap({
         )}
       </div>
 
-      {/* TOP-RIGHT FLOATING MAP CONTROLS + LEGEND */}
+      {/* TOP-RIGHT FLOATING MAP CONTROLS + LEGEND (positioned below mobile header, top-right on desktop) */}
       <div
         ref={legendWrapRef}
-        className="pointer-events-none fixed top-3.5 right-3.5 z-20 flex flex-col items-end gap-2"
+        className="pointer-events-none fixed top-[68px] right-2.5 z-10 flex flex-col items-end gap-1.5 md:top-3.5 md:right-3.5 md:z-20 md:gap-2"
       >
         {/* Zoom Group */}
         <div className="pointer-events-auto flex flex-col overflow-hidden rounded-2xl border border-black/10 bg-white/95 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-neutral-900/95">
@@ -908,7 +923,7 @@ export function TransitMap({
             onClick={() => mapRef.current?.zoomIn({ duration: 250 })}
             aria-label="Zoom in"
             title="Zoom in"
-            className="flex h-9 w-9 items-center justify-center border-b border-black/8 text-[#171717] transition hover:bg-[#F5F6F8] dark:border-white/10 dark:text-neutral-100 dark:hover:bg-neutral-800"
+            className="flex h-10 w-10 items-center justify-center border-b border-black/8 text-[#171717] transition hover:bg-[#F5F6F8] dark:border-white/10 dark:text-neutral-100 dark:hover:bg-neutral-800"
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -916,7 +931,7 @@ export function TransitMap({
             onClick={() => mapRef.current?.zoomOut({ duration: 250 })}
             aria-label="Zoom out"
             title="Zoom out"
-            className="flex h-9 w-9 items-center justify-center text-[#171717] transition hover:bg-[#F5F6F8] dark:text-neutral-100 dark:hover:bg-neutral-800"
+            className="flex h-10 w-10 items-center justify-center text-[#171717] transition hover:bg-[#F5F6F8] dark:text-neutral-100 dark:hover:bg-neutral-800"
           >
             <Minus className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -925,12 +940,17 @@ export function TransitMap({
         {/* Standalone Satellite & Dark Mode Pills */}
         <div className="pointer-events-auto flex flex-col items-end gap-1.5">
           <button
-            onClick={() => setSatellite((s) => !s)}
-            aria-pressed={satellite}
-            aria-label="Toggle satellite map view"
-            title="Toggle satellite view"
-            className={`flex h-8 items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium shadow-sm backdrop-blur-md transition ${
-              satellite
+            onClick={() => {
+              if (!lowDataMode) setSatellite((s) => !s);
+            }}
+            disabled={lowDataMode}
+            aria-pressed={satellite && !lowDataMode}
+            aria-label={
+              lowDataMode ? 'Satellite disabled in Low-Data mode' : 'Toggle satellite map view'
+            }
+            title={lowDataMode ? 'Disabled in Low-Data mode' : 'Toggle satellite view'}
+            className={`flex h-9 items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium shadow-sm backdrop-blur-md transition disabled:cursor-not-allowed disabled:opacity-50 ${
+              satellite && !lowDataMode
                 ? 'border-[#176B52] bg-[#176B52] text-white'
                 : 'border-black/10 bg-white/95 text-[#171717] hover:bg-[#F5F6F8] dark:border-white/10 dark:bg-neutral-900/95 dark:text-neutral-100 dark:hover:bg-neutral-800'
             }`}
@@ -943,7 +963,7 @@ export function TransitMap({
             aria-pressed={dark}
             aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
             title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-            className={`flex h-8 items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium shadow-sm backdrop-blur-md transition ${
+            className={`flex h-9 items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium shadow-sm backdrop-blur-md transition ${
               dark
                 ? 'border-[#176B52] bg-neutral-900/95 text-emerald-400 hover:bg-neutral-800'
                 : 'border-black/10 bg-white/95 text-[#171717] hover:bg-[#F5F6F8]'
@@ -952,6 +972,12 @@ export function TransitMap({
             {dark ? <Sun className="h-3.5 w-3.5" aria-hidden="true" /> : <Moon className="h-3.5 w-3.5" aria-hidden="true" />}
             <span>{dark ? 'Light' : 'Dark'}</span>
           </button>
+          {lowDataMode && (
+            <div className="flex items-center gap-1 rounded-full border border-[#176B52]/30 bg-[#eaf3f0] px-2.5 py-1 text-[10px] font-semibold text-[#176B52]">
+              <Wifi className="h-3 w-3" aria-hidden="true" />
+              <span>Low-Data</span>
+            </div>
+          )}
         </div>
 
         {/* Recenter / Locate / Legend Stack */}

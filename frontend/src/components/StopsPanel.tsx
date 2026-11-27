@@ -1,13 +1,23 @@
 import { useMemo, useState } from 'react';
 import { ChevronRight, MapPin, Search } from 'lucide-react';
-import type { StopItem } from '../types/transit';
+import type { Language, NavTab, StopItem } from '../types/transit';
+import { DirectoryTabs } from './ui/DirectoryTabs';
 
 interface StopsPanelProps {
   stops: StopItem[];
+  lang?: Language;
+  liveBusCount?: number;
   onSelectStop: (stopId: string) => void;
+  onSwitchTab?: (tab: NavTab) => void;
 }
 
-export function StopsPanel({ stops, onSelectStop }: StopsPanelProps) {
+export function StopsPanel({
+  stops,
+  lang = 'en',
+  liveBusCount = 0,
+  onSelectStop,
+  onSwitchTab,
+}: StopsPanelProps) {
   const [filter, setFilter] = useState('');
 
   const filtered = useMemo(() => {
@@ -21,7 +31,15 @@ export function StopsPanel({ stops, onSelectStop }: StopsPanelProps) {
   return (
     <div className="flex h-full flex-col">
       <div className="space-y-2.5 border-b border-[#E5E7EB] bg-white/80 p-4 dark:border-neutral-800 dark:bg-neutral-950/80">
-        <div className="flex min-h-[40px] items-center gap-2 rounded-xl border border-[#E5E7EB] bg-[#F5F6F8] px-3 py-1.5 focus-within:border-[#176B52] focus-within:bg-white dark:border-neutral-800 dark:bg-neutral-900 dark:focus-within:bg-neutral-900">
+        {onSwitchTab && (
+          <DirectoryTabs
+            active="stops"
+            lang={lang}
+            liveBusCount={liveBusCount}
+            onSwitch={onSwitchTab}
+          />
+        )}
+        <div className="flex min-h-[44px] items-center gap-2 rounded-xl border border-[#E5E7EB] bg-[#F5F6F8] px-3 py-1.5 focus-within:border-[#176B52] focus-within:bg-white dark:border-neutral-800 dark:bg-neutral-900 dark:focus-within:bg-neutral-900">
           <Search className="h-4 w-4 shrink-0 text-[#737373]" aria-hidden="true" />
           <input
             type="text"

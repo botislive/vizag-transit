@@ -235,7 +235,37 @@ export interface SavedItem {
   savedAt: number;
 }
 
-export type NavTab = 'routes' | 'stops' | 'buses' | 'plan' | 'saved';
+export interface SavedJourney {
+  id: string;
+  fromId: string;
+  fromName: string;
+  toId: string;
+  toName: string;
+  tag?: 'home' | 'work' | 'commute';
+  savedAt: number;
+}
+
+export type Language = 'en' | 'te';
+
+export type ReportKind =
+  | 'bus_did_not_arrive'
+  | 'bus_skipped_stop'
+  | 'wrong_stop_location'
+  | 'wrong_route_info'
+  | 'wrong_gps_position';
+
+export interface BusAlert {
+  id: string;
+  routeId: string;
+  routeShortName: string;
+  stopId: string;
+  stopName: string;
+  thresholdMin: 10 | 5 | 2;
+  triggered: boolean;
+  createdAt: number;
+}
+
+export type NavTab = 'explore' | 'routes' | 'saved' | 'stops' | 'buses';
 
 export type Selection =
   | { kind: 'vehicle'; id: string }

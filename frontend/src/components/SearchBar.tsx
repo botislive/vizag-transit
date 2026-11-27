@@ -250,10 +250,10 @@ export function SearchBar({
               >
                 <Clock className="h-4 w-4 shrink-0 text-[#737373]" aria-hidden="true" />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-[#171717] dark:text-neutral-100">
+                  <div className="text-sm leading-snug font-medium text-[#171717] dark:text-neutral-100">
                     {item.title}
                   </div>
-                  <div className="truncate text-xs text-[#737373]">{item.subtitle}</div>
+                  <div className="text-xs leading-snug text-[#737373]">{item.subtitle}</div>
                 </div>
               </button>
             );
@@ -306,7 +306,7 @@ export function SearchBar({
                   >
                     <RouteBadge number={r.shortName} size="sm" />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-[#171717] dark:text-neutral-100">
+                      <div className="text-sm leading-snug font-medium text-[#171717] dark:text-neutral-100">
                         {r.longName}
                       </div>
                       <div className="text-xs text-[#737373]">
@@ -341,7 +341,7 @@ export function SearchBar({
                     }`}
                   >
                     <MapPin className="h-4 w-4 shrink-0 text-[#176B52]" aria-hidden="true" />
-                    <span className="truncate text-sm font-medium text-[#171717] dark:text-neutral-100">
+                    <span className="text-sm leading-snug font-medium text-[#171717] dark:text-neutral-100">
                       {s.name}
                     </span>
                   </button>
@@ -373,10 +373,10 @@ export function SearchBar({
                     <div className="flex min-w-0 items-center gap-2.5">
                       <Navigation className="h-4 w-4 shrink-0 text-[#737373]" aria-hidden="true" />
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-[#171717] dark:text-neutral-100">
+                        <div className="text-sm leading-snug font-medium text-[#171717] dark:text-neutral-100">
                           {d.destination}
                         </div>
-                        <div className="truncate text-xs text-[#737373]">
+                        <div className="text-xs text-[#737373]">
                           Served by route {d.route.shortName}
                         </div>
                       </div>

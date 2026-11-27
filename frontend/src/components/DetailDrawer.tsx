@@ -1,14 +1,27 @@
+import { useState } from 'react';
 import {
+  AlertTriangle,
   ArrowLeft,
+  Bell,
+  BellOff,
   Bookmark,
   Bus,
+  Check,
+  Compass,
+  Footprints,
   MapPin,
+  Maximize2,
+  Minimize2,
   Radio,
+  Share2,
   WifiOff,
   X,
 } from 'lucide-react';
 import { formatClockTime, formatETA, formatRelativeAge } from '../lib/format';
+import { useT } from '../lib/i18n';
 import type {
+  BusAlert,
+  Language,
   RouteDetail,
   SavedItem,
   Selection,
@@ -16,11 +29,15 @@ import type {
   Vehicle,
   VehicleStopProgress,
 } from '../types/transit';
+import { ReportIssueModal } from './ReportIssueModal';
 import { RouteBadge, StatusBadge } from './ui/StatusBadge';
 
 interface DetailDrawerProps {
   selection: Selection;
+  lang?: Language;
   canGoBack?: boolean;
+  sheetExpanded?: boolean;
+  onToggleSheetExpand?: () => void;
   vehicle: Vehicle | null;
   vehicleStops?: VehicleStopProgress[];
   vehicleOrigin?: string;
@@ -33,6 +50,17 @@ interface DetailDrawerProps {
   error: string | null;
   isSaved: (kind: 'route' | 'stop', id: string) => boolean;
   onToggleSave: (item: Omit<SavedItem, 'savedAt'>) => void;
+  busAlert?: BusAlert | null;
+  alertPermission?: NotificationPermission;
+  onEnableAlert?: (params: {
+    routeId: string;
+    routeShortName: string;
+    stopId: string;
+    stopName: string;
+    thresholdMin: 10 | 5 | 2;
+  }) => void;
+  onCancelAlert?: () => void;
+  onPlanFromStop?: (stopId: string, stopName: string) => void;
   onBack: () => void;
   onClose: () => void;
   onSelectRoute: (routeId: string) => void;
@@ -42,7 +70,10 @@ interface DetailDrawerProps {
 
 export function DetailDrawer({
   selection,
+  lang = 'en',
   canGoBack = false,
+  sheetExpanded = false,
+  onToggleSheetExpand,
   vehicle,
   vehicleStops = [],
   vehicleOrigin,
@@ -55,34 +86,131 @@ export function DetailDrawer({
   error,
   isSaved,
   onToggleSave,
+  busAlert = null,
+  alertPermission = 'default',
+  onEnableAlert,
+  onCancelAlert,
+  onPlanFromStop,
   onBack,
   onClose,
   onSelectRoute,
   onSelectStop,
   onSelectVehicle,
 }: DetailDrawerProps) {
+  const t = useT(lang);
+  const [copied, setCopied] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [notifyOpen, setNotifyOpen] = useState(false);
+  const [alertStopId, setAlertStopId] = useState('');
+  const [stopNotifyOpen, setStopNotifyOpen] = useState(false);
+  const [alertRouteId, setAlertRouteId] = useState('');
+  const [alertThreshold, setAlertThreshold] = useState<10 | 5 | 2>(5);
+
   if (!selection) return null;
+
+  const sharePath =
+    selection.kind === 'route'
+      ? `/routes/${encodeURIComponent(selection.id)}`
+      : selection.kind === 'stop'
+        ? `/stops/${encodeURIComponent(selection.id)}`
+        : `/bus/${encodeURIComponent(selection.id)}`;
+
+  const handleShare = async () => {
+    const url = `${window.location.origin}${sharePath}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: document.title, url });
+        return;
+      }
+    } catch {
+      // fall through
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  };
+
+  const reportContext =
+    selection.kind === 'vehicle'
+      ? `Bus ${vehicle?.routeShortName || ''} (${vehicle?.registrationNumber || selection.id})`
+      : selection.kind === 'route'
+        ? `Route ${routeDetail?.route.shortName || selection.id}`
+        : `Stop ${stopDetail?.stop.name || selection.id}`;
 
   return (
     <div className="flex h-full flex-col bg-white dark:bg-neutral-950">
-      {/* Header Bar */}
-      <div className="flex min-h-[48px] items-center justify-between border-b border-[#E5E7EB] px-3 py-2 dark:border-neutral-800">
+      {/* Header Bar with Back, Share, Report, Mobile Expand, Close */}
+      <div className="flex min-h-[48px] items-center justify-between border-b border-[#E5E7EB] px-2.5 py-2 dark:border-neutral-800">
         <button
           onClick={onBack}
           className="flex min-h-[40px] items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-[#171717] transition hover:bg-[#F5F6F8] dark:text-neutral-200 dark:hover:bg-neutral-900"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          <span>{canGoBack ? 'Back' : 'All'}</span>
+          <span>{canGoBack ? t.back : t.all}</span>
         </button>
-        <button
-          onClick={onClose}
-          aria-label="Close details"
-          title="Close panel"
-          className="flex h-10 w-10 items-center justify-center rounded-lg text-[#737373] transition hover:bg-[#F5F6F8] hover:text-[#171717] dark:hover:bg-neutral-900"
-        >
-          <X className="h-4 w-4" aria-hidden="true" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={handleShare}
+            aria-label={t.share}
+            title={t.share}
+            className="flex h-10 items-center gap-1 rounded-lg px-2 text-xs font-medium text-[#737373] transition hover:bg-[#F5F6F8] hover:text-[#171717] dark:hover:bg-neutral-900 dark:hover:text-neutral-200"
+          >
+            {copied ? (
+              <Check className="h-3.5 w-3.5 text-[#15803d]" aria-hidden="true" />
+            ) : (
+              <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+            )}
+            <span className="hidden sm:inline">{copied ? t.copied : t.share}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setReportOpen(true)}
+            aria-label={t.reportIssue}
+            title={t.reportIssue}
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-[#737373] transition hover:bg-[#F5F6F8] hover:text-[#b45309] dark:hover:bg-neutral-900"
+          >
+            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+          </button>
+          {onToggleSheetExpand && (
+            <button
+              type="button"
+              onClick={onToggleSheetExpand}
+              aria-label={sheetExpanded ? t.collapseSheet : t.expandSheet}
+              title={sheetExpanded ? t.collapseSheet : t.expandSheet}
+              className="flex h-10 w-10 items-center justify-center rounded-lg text-[#737373] transition hover:bg-[#F5F6F8] hover:text-[#171717] md:hidden dark:hover:bg-neutral-900"
+            >
+              {sheetExpanded ? (
+                <Minimize2 className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <Maximize2 className="h-4 w-4" aria-hidden="true" />
+              )}
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            aria-label="Close details"
+            title="Close panel"
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-[#737373] transition hover:bg-[#F5F6F8] hover:text-[#171717] dark:hover:bg-neutral-900"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
       </div>
+
+      {reportOpen && (
+        <ReportIssueModal
+          routeId={selection.kind === 'route' ? selection.id : vehicle?.routeId}
+          stopId={selection.kind === 'stop' ? selection.id : undefined}
+          vehicleId={selection.kind === 'vehicle' ? selection.id : undefined}
+          contextLabel={reportContext}
+          onClose={() => setReportOpen(false)}
+        />
+      )}
 
       <div className="thin-scroll flex-1 overflow-y-auto p-4">
         {loading && (
@@ -266,7 +394,7 @@ export function DetailDrawer({
 
                           <div className="min-w-0 flex-1 py-2.5">
                             <div
-                              className={`truncate text-xs ${
+                              className={`text-xs leading-snug ${
                                 inActiveSegment
                                   ? 'font-semibold text-[#171717] dark:text-neutral-100'
                                   : isPassed
@@ -358,6 +486,112 @@ export function DetailDrawer({
               </button>
             </div>
 
+            {/* Notify Me When Approaching (Route Boarding Alert) */}
+            {onEnableAlert && routeDetail.stops.length > 0 && (
+              <div className="rounded-xl border border-[#E5E7EB] bg-[#F5F6F8] p-3 dark:border-neutral-800 dark:bg-neutral-900">
+                {busAlert && busAlert.routeId === routeDetail.route.routeId ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 text-xs">
+                      <div className="flex items-center gap-1.5 font-semibold text-[#176B52] dark:text-emerald-400">
+                        <Bell className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                        <span>{t.notifyActive}: ~{busAlert.thresholdMin}m before {busAlert.stopName}</span>
+                      </div>
+                      <p className="mt-0.5 text-[11px] text-[#737373]">
+                        {alertPermission === 'denied'
+                          ? 'Browser notification permission denied — alerts will show inside the app while open.'
+                          : 'Keep this browser tab open for live arrival alerts.'}
+                      </p>
+                    </div>
+                    {onCancelAlert && (
+                      <button
+                        type="button"
+                        onClick={onCancelAlert}
+                        className="flex min-h-[36px] shrink-0 items-center gap-1 rounded-lg border border-[#E5E7EB] bg-white px-2.5 text-xs font-medium text-[#dc2626] dark:border-neutral-700 dark:bg-neutral-800"
+                      >
+                        <BellOff className="h-3.5 w-3.5" aria-hidden="true" />
+                        <span>{t.notifyCancel}</span>
+                      </button>
+                    )}
+                  </div>
+                ) : !notifyOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAlertStopId(routeDetail.stops[0]?.stopId || '');
+                      setNotifyOpen(true);
+                    }}
+                    className="flex min-h-[40px] w-full items-center justify-between text-left text-xs font-semibold text-[#171717] dark:text-neutral-200"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Bell className="h-4 w-4 text-[#176B52]" aria-hidden="true" />
+                      <span>{t.notifyMe}</span>
+                    </span>
+                    <span className="text-[11px] font-medium text-[#176B52]">Set alert</span>
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs font-semibold text-[#171717] dark:text-neutral-200">
+                      <span>Boarding Stop Alert</span>
+                      <button
+                        type="button"
+                        onClick={() => setNotifyOpen(false)}
+                        className="text-[11px] text-[#737373] hover:underline"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <select
+                      aria-label="Select boarding stop for alert"
+                      value={alertStopId}
+                      onChange={(e) => setAlertStopId(e.target.value)}
+                      className="min-h-[40px] w-full rounded-lg border border-[#E5E7EB] bg-white px-2.5 text-xs text-[#171717] dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+                    >
+                      {routeDetail.stops.map((s) => (
+                        <option key={`${s.stopId}-${s.sequence}`} value={s.stopId}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="flex items-center gap-1.5">
+                      {([10, 5, 2] as const).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setAlertThreshold(m)}
+                          className={`min-h-[34px] flex-1 rounded-lg border text-xs font-medium ${
+                            alertThreshold === m
+                              ? 'border-[#176B52] bg-[#176B52] text-white'
+                              : 'border-[#E5E7EB] bg-white text-[#171717] dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200'
+                          }`}
+                        >
+                          {m === 2 ? 'Approaching' : `${m} min`}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const st = routeDetail.stops.find((x) => x.stopId === alertStopId) || routeDetail.stops[0];
+                        if (st) {
+                          onEnableAlert({
+                            routeId: routeDetail.route.routeId,
+                            routeShortName: routeDetail.route.shortName,
+                            stopId: st.stopId,
+                            stopName: st.name,
+                            thresholdMin: alertThreshold,
+                          });
+                          setNotifyOpen(false);
+                        }
+                      }}
+                      className="min-h-[40px] w-full rounded-lg bg-[#176B52] px-3 text-xs font-semibold text-white"
+                    >
+                      Enable Browser Alert
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Direction / Variant switcher */}
             {routeDetail.variants.length > 1 && (
               <div>
@@ -371,13 +605,13 @@ export function DetailDrawer({
                       <button
                         key={v.routeId}
                         onClick={() => onSelectRoute(v.routeId)}
-                        className={`flex min-h-[44px] w-full items-center justify-between rounded-xl border px-3 py-2 text-left text-xs transition ${
+                        className={`flex min-h-[44px] w-full items-center justify-between gap-2.5 rounded-xl border px-3 py-2 text-left text-xs transition ${
                           active
                             ? 'border-[#176B52] bg-[#eaf3f0] font-semibold text-[#176B52] dark:bg-emerald-950/30 dark:text-emerald-300'
                             : 'border-[#E5E7EB] text-[#171717] hover:bg-[#F5F6F8] dark:border-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-900'
                         }`}
                       >
-                        <span className="truncate">
+                        <span className="leading-snug">
                           {active ? `Viewing: ${v.longName}` : v.longName}
                         </span>
                         <span className="font-mono-num shrink-0 text-[11px] opacity-75">
@@ -394,16 +628,16 @@ export function DetailDrawer({
             <div>
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-xs font-semibold tracking-wide text-[#737373] uppercase">
-                  Live Buses ({routeDetail.vehicles.length})
+                  Live Buses ({(routeDetail.vehicles ?? []).length})
                 </h3>
               </div>
-              {routeDetail.vehicles.length === 0 ? (
+              {(routeDetail.vehicles ?? []).length === 0 ? (
                 <div className="rounded-xl border border-[#E5E7EB] bg-[#F5F6F8] p-3.5 text-xs text-[#737373] dark:border-neutral-800 dark:bg-neutral-900">
                   No live buses currently detected on this route.
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {routeDetail.vehicles.map((v) => (
+                  {(routeDetail.vehicles ?? []).map((v) => (
                     <button
                       key={v.vehicleId}
                       onClick={() => onSelectVehicle(v.vehicleId)}
@@ -424,7 +658,7 @@ export function DetailDrawer({
                             </span>
                           )}
                         </div>
-                        <div className="truncate text-xs text-[#171717] dark:text-neutral-200">
+                        <div className="text-xs leading-snug text-[#171717] dark:text-neutral-200">
                           {v.nextStopName
                             ? `Next: ${v.nextStopName}`
                             : `Updated ${formatRelativeAge(v.ageSec)}`}
@@ -461,24 +695,24 @@ export function DetailDrawer({
               ) : (
                 <div className="relative space-y-0.5 pl-4 before:absolute before:top-4 before:bottom-4 before:left-[7px] before:w-0.5 before:bg-[#E5E7EB] dark:before:bg-neutral-800">
                   {routeDetail.stops.map((s, idx) => (
-                    <button
-                      key={`${s.stopId}-${s.sequence}`}
-                      onClick={() => onSelectStop(s.stopId)}
-                      className="group relative flex min-h-[44px] w-full items-center justify-between rounded-lg px-2.5 py-2 text-left transition hover:bg-[#F5F6F8] dark:hover:bg-neutral-900"
-                    >
-                      <span
-                        aria-hidden="true"
-                        className={`absolute -left-[13px] h-2.5 w-2.5 rounded-full border-2 border-white dark:border-neutral-950 ${
-                          idx === 0 || idx === routeDetail.stops.length - 1
-                            ? 'bg-[#176B52]'
-                            : 'bg-[#737373]/60 group-hover:bg-[#176B52]'
-                        }`}
-                      />
-                      <span className="truncate text-sm font-medium text-[#171717] dark:text-neutral-200">
-                        {s.name}
-                      </span>
-                      <span className="font-mono-num text-[11px] text-[#737373]">#{s.sequence}</span>
-                    </button>
+                      <button
+                        key={`${s.stopId}-${s.sequence}`}
+                        onClick={() => onSelectStop(s.stopId)}
+                        className="group relative flex min-h-[44px] w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left transition hover:bg-[#F5F6F8] dark:hover:bg-neutral-900"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={`absolute -left-[13px] h-2.5 w-2.5 rounded-full border-2 border-white dark:border-neutral-950 ${
+                            idx === 0 || idx === routeDetail.stops.length - 1
+                              ? 'bg-[#176B52]'
+                              : 'bg-[#737373]/60 group-hover:bg-[#176B52]'
+                          }`}
+                        />
+                        <span className="text-sm leading-snug font-medium text-[#171717] dark:text-neutral-200">
+                          {s.name}
+                        </span>
+                        <span className="font-mono-num shrink-0 text-[11px] text-[#737373]">#{s.sequence}</span>
+                      </button>
                   ))}
                 </div>
               )}
@@ -499,7 +733,7 @@ export function DetailDrawer({
                   {stopDetail.stop.name}
                 </h2>
                 <p className="mt-0.5 text-xs text-[#737373]">
-                  {stopDetail.routes.length} routes serving this stop
+                  {(stopDetail.routes ?? []).length} routes serving this stop
                 </p>
               </div>
               <button
@@ -508,7 +742,7 @@ export function DetailDrawer({
                     kind: 'stop',
                     id: stopDetail.stop.stopId,
                     title: stopDetail.stop.name,
-                    subtitle: `${stopDetail.routes.length} routes`,
+                    subtitle: `${(stopDetail.routes ?? []).length} routes`,
                   })
                 }
                 aria-label={
@@ -526,13 +760,146 @@ export function DetailDrawer({
               </button>
             </div>
 
+            {/* Stop Quick Actions: Plan From Here & Walking Directions */}
+            <div className="grid grid-cols-2 gap-2">
+              {onPlanFromStop && (
+                <button
+                  type="button"
+                  onClick={() => onPlanFromStop(stopDetail.stop.stopId, stopDetail.stop.name)}
+                  className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-[#176B52]/30 bg-[#eaf3f0] px-3 text-xs font-semibold text-[#176B52] transition hover:bg-[#d9ece5] dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+                >
+                  <Compass className="h-4 w-4" aria-hidden="true" />
+                  <span>Plan from stop</span>
+                </button>
+              )}
+              <a
+                href={`https://www.google.com/maps/dir/?api=1&destination=${stopDetail.stop.lat},${stopDetail.stop.lon}&travelmode=walking`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-[#E5E7EB] bg-[#F5F6F8] px-3 text-xs font-medium text-[#171717] transition hover:bg-[#eceef1] dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-200"
+              >
+                <Footprints className="h-4 w-4 text-[#176B52]" aria-hidden="true" />
+                <span>{t.walkingDirections}</span>
+              </a>
+            </div>
+
+            {/* Notify Me When Approaching (Stop Boarding Alert) */}
+            {onEnableAlert && (stopDetail.routes ?? []).length > 0 && (
+              <div className="rounded-xl border border-[#E5E7EB] bg-[#F5F6F8] p-3 dark:border-neutral-800 dark:bg-neutral-900">
+                {busAlert && busAlert.stopId === stopDetail.stop.stopId ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 text-xs">
+                      <div className="flex items-center gap-1.5 font-semibold text-[#176B52] dark:text-emerald-400">
+                        <Bell className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                        <span>
+                          {t.notifyActive}: Route {busAlert.routeShortName} (~{busAlert.thresholdMin}m)
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-[11px] text-[#737373]">
+                        {alertPermission === 'denied'
+                          ? 'Browser notification permission denied — alerts will show inside the app while open.'
+                          : 'Keep this browser tab open for live arrival alerts.'}
+                      </p>
+                    </div>
+                    {onCancelAlert && (
+                      <button
+                        type="button"
+                        onClick={onCancelAlert}
+                        className="flex min-h-[36px] shrink-0 items-center gap-1 rounded-lg border border-[#E5E7EB] bg-white px-2.5 text-xs font-medium text-[#dc2626] dark:border-neutral-700 dark:bg-neutral-800"
+                      >
+                        <BellOff className="h-3.5 w-3.5" aria-hidden="true" />
+                        <span>{t.notifyCancel}</span>
+                      </button>
+                    )}
+                  </div>
+                ) : !stopNotifyOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAlertRouteId((stopDetail.routes ?? [])[0]?.routeId || '');
+                      setStopNotifyOpen(true);
+                    }}
+                    className="flex min-h-[40px] w-full items-center justify-between text-left text-xs font-semibold text-[#171717] dark:text-neutral-200"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Bell className="h-4 w-4 text-[#176B52]" aria-hidden="true" />
+                      <span>{t.notifyMe}</span>
+                    </span>
+                    <span className="text-[11px] font-medium text-[#176B52]">Set alert</span>
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs font-semibold text-[#171717] dark:text-neutral-200">
+                      <span>Bus Arrival Alert</span>
+                      <button
+                        type="button"
+                        onClick={() => setStopNotifyOpen(false)}
+                        className="text-[11px] text-[#737373] hover:underline"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <select
+                      aria-label="Select route for stop alert"
+                      value={alertRouteId}
+                      onChange={(e) => setAlertRouteId(e.target.value)}
+                      className="min-h-[40px] w-full rounded-lg border border-[#E5E7EB] bg-white px-2.5 text-xs text-[#171717] dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-100"
+                    >
+                      {(stopDetail.routes ?? []).map((sr) => (
+                        <option key={sr.routeId} value={sr.routeId}>
+                          {sr.shortName} · {sr.longName}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="flex items-center gap-1.5">
+                      {([10, 5, 2] as const).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setAlertThreshold(m)}
+                          className={`min-h-[34px] flex-1 rounded-lg border text-xs font-medium ${
+                            alertThreshold === m
+                              ? 'border-[#176B52] bg-[#176B52] text-white'
+                              : 'border-[#E5E7EB] bg-white text-[#171717] dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200'
+                          }`}
+                        >
+                          {m === 2 ? 'Approaching' : `${m} min`}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const sr =
+                          (stopDetail.routes ?? []).find((x) => x.routeId === alertRouteId) ||
+                          (stopDetail.routes ?? [])[0];
+                        if (sr) {
+                          onEnableAlert({
+                            routeId: sr.routeId,
+                            routeShortName: sr.shortName,
+                            stopId: stopDetail.stop.stopId,
+                            stopName: stopDetail.stop.name,
+                            thresholdMin: alertThreshold,
+                          });
+                          setStopNotifyOpen(false);
+                        }
+                      }}
+                      className="min-h-[40px] w-full rounded-lg bg-[#176B52] px-3 text-xs font-semibold text-white"
+                    >
+                      Enable Browser Alert
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Routes serving stop */}
             <div>
               <h3 className="mb-2 text-xs font-semibold tracking-wide text-[#737373] uppercase">
                 Routes Serving Stop
               </h3>
               <div className="flex flex-wrap gap-1.5">
-                {stopDetail.routes.map((r) => (
+                {(stopDetail.routes ?? []).map((r) => (
                   <button
                     key={r.routeId}
                     onClick={() => onSelectRoute(r.routeId)}
@@ -555,68 +922,84 @@ export function DetailDrawer({
                 <div className="rounded-xl border border-[#b45309]/25 bg-[#b45309]/10 p-3.5 text-xs text-[#b45309] dark:text-amber-200">
                   Live tracking is temporarily unavailable. Scheduled timetable is shown below.
                 </div>
-              ) : stopDetail.liveArrivals.length === 0 ? (
+              ) : (stopDetail.liveArrivals ?? []).length === 0 ? (
                 <div className="rounded-xl border border-[#E5E7EB] bg-[#F5F6F8] p-3.5 text-xs text-[#737373] dark:border-neutral-800 dark:bg-neutral-900">
                   No live buses currently detected for this stop.
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {stopDetail.liveArrivals.map((a) => (
+                  {(stopDetail.liveArrivals ?? []).map((a) => (
                     <button
                       key={`${a.vehicleId}-${a.arrivalTime}`}
                       onClick={() => onSelectVehicle(a.vehicleId)}
-                      className="flex min-h-[56px] w-full items-center justify-between gap-2 rounded-xl border border-[#176B52]/25 bg-[#eaf3f0]/50 px-3.5 py-2.5 text-left transition hover:bg-[#eaf3f0] dark:border-emerald-900/40 dark:bg-emerald-950/20"
+                      className="flex min-h-[56px] w-full flex-col gap-1.5 rounded-xl border border-[#176B52]/25 bg-[#eaf3f0]/60 px-3.5 py-2.5 text-left transition hover:bg-[#eaf3f0] dark:border-emerald-900/40 dark:bg-emerald-950/25"
                     >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <RouteBadge number={a.routeShortName} size="sm" />
-                          <span className="truncate text-sm font-medium text-[#171717] dark:text-neutral-100">
-                            {a.headsign || a.routeLongName}
-                          </span>
-                        </div>
-                        <div className="mt-1 text-xs text-[#737373]">
+                      <div className="flex w-full items-start gap-2">
+                        <RouteBadge number={a.routeShortName} size="sm" />
+                        <span className="min-w-0 flex-1 text-sm leading-snug font-medium break-words text-[#171717] dark:text-neutral-100">
+                          {a.headsign || a.routeLongName}
+                        </span>
+                      </div>
+                      <div className="flex w-full items-center justify-between gap-2 pl-0.5">
+                        <span className="text-xs text-[#737373]">
                           Live · Updated{' '}
                           {formatRelativeAge(
                             Math.max(0, Math.floor(Date.now() / 1000) - a.gpsTimestamp),
                           )}
-                        </div>
+                        </span>
+                        <span
+                          className={`font-mono-num shrink-0 font-bold ${
+                            a.etaSec > 0
+                              ? 'text-sm text-[#176B52] dark:text-emerald-400'
+                              : 'text-xs text-[#737373] dark:text-neutral-400'
+                          }`}
+                        >
+                          {a.etaSec > 0 ? formatETA(a.etaSec) : 'Arrival time unavailable'}
+                        </span>
                       </div>
-                      <span className="font-mono-num shrink-0 text-sm font-bold text-[#176B52] dark:text-emerald-400">
-                        {a.etaSec > 0 ? formatETA(a.etaSec) : 'Arrival time unavailable'}
-                      </span>
                     </button>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Scheduled Departures (Static GTFS) */}
+            {/* Departure Board: Route | Destination | Arrival | Status */}
             <div>
-              <h3 className="mb-2 text-xs font-semibold tracking-wide text-[#737373] uppercase">
-                Scheduled Timetable
-              </h3>
-              {stopDetail.scheduled.length === 0 ? (
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h3 className="text-xs font-semibold tracking-wide text-[#737373] uppercase">
+                  {t.departureBoard}
+                </h3>
+                <span className="text-[10px] text-[#737373]">Live vs Scheduled</span>
+              </div>
+              {(stopDetail.liveArrivals ?? []).length === 0 && (stopDetail.scheduled ?? []).length === 0 ? (
                 <div className="rounded-xl border border-[#E5E7EB] bg-[#F5F6F8] p-3.5 text-xs text-[#737373] dark:border-neutral-800 dark:bg-neutral-900">
                   No remaining scheduled departures today.
                 </div>
               ) : (
                 <div className="divide-y divide-[#E5E7EB] overflow-hidden rounded-xl border border-[#E5E7EB] bg-white dark:divide-neutral-800 dark:border-neutral-800 dark:bg-neutral-900">
-                  {stopDetail.scheduled.map((sd) => (
+                  <div className="grid grid-cols-[54px_1fr_auto_auto] gap-2 bg-[#F5F6F8] px-3 py-1.5 text-[10px] font-semibold tracking-wide text-[#737373] uppercase dark:bg-neutral-900/90">
+                    <span>{t.routeCol}</span>
+                    <span>{t.destCol}</span>
+                    <span className="text-right">{t.arrivalCol}</span>
+                    <span className="text-right">{t.statusCol}</span>
+                  </div>
+                  {(stopDetail.scheduled ?? []).slice(0, 10).map((sd) => (
                     <button
                       key={`${sd.tripId}-${sd.departureTime}`}
                       onClick={() => onSelectRoute(sd.routeId)}
-                      className="flex min-h-[44px] w-full items-center justify-between gap-2 px-3.5 py-2 text-left text-xs transition hover:bg-[#F5F6F8] dark:hover:bg-neutral-800"
+                      className="grid min-h-[46px] w-full grid-cols-[54px_1fr_auto_auto] items-center gap-2 px-3 py-2 text-left text-xs transition hover:bg-[#F5F6F8] dark:hover:bg-neutral-800"
                     >
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="font-mono-num rounded bg-[#F5F6F8] px-1.5 py-0.5 text-xs font-semibold text-[#171717] dark:bg-neutral-800 dark:text-neutral-200">
-                          {sd.shortName}
-                        </span>
-                        <span className="truncate text-[#171717] dark:text-neutral-300">
-                          {sd.headsign || sd.longName}
-                        </span>
-                      </div>
-                      <span className="font-mono-num shrink-0 text-xs text-[#737373]">
+                      <span className="font-mono-num inline-flex justify-center rounded bg-[#F5F6F8] px-1.5 py-0.5 text-xs font-semibold text-[#171717] dark:bg-neutral-800 dark:text-neutral-200">
+                        {sd.shortName}
+                      </span>
+                      <span className="leading-snug text-[#171717] dark:text-neutral-200">
+                        {sd.headsign || sd.longName}
+                      </span>
+                      <span className="font-mono-num text-right text-xs font-semibold text-[#171717] dark:text-neutral-200">
                         {sd.departureTime}
+                      </span>
+                      <span className="rounded bg-[#F5F6F8] px-1.5 py-0.5 text-[10px] font-medium text-[#737373] dark:bg-neutral-800 dark:text-neutral-400">
+                        {t.scheduledLabel}
                       </span>
                     </button>
                   ))}

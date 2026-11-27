@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"vizag-transit/internal/gtfs"
@@ -18,13 +19,19 @@ import (
 
 // Server holds dependencies for all HTTP API handlers.
 type Server struct {
-	db     *sql.DB
-	poller *rt.Poller
+	db          *sql.DB
+	poller      *rt.Poller
+	reportMu    sync.Mutex
+	reportRate  map[string][]int64
 }
 
 // NewServer creates an API Server and registers routes on a ServeMux.
 func NewServer(conn *sql.DB, poller *rt.Poller) http.Handler {
-	s := &Server{db: conn, poller: poller}
+	s := &Server{
+		db:         conn,
+		poller:     poller,
+		reportRate: make(map[string][]int64),
+	}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /api/health", s.handleHealth)
@@ -39,6 +46,7 @@ func NewServer(conn *sql.DB, poller *rt.Poller) http.Handler {
 	mux.HandleFunc("GET /api/nearby-stops", s.handleNearbyStops)
 	mux.HandleFunc("GET /api/journey", s.handleJourney)
 	mux.HandleFunc("GET /api/live", s.handleLiveSSE)
+	mux.HandleFunc("POST /api/reports", s.handleCreateReport)
 
 	// SEO discovery endpoints
 	mux.HandleFunc("GET /robots.txt", s.handleRobotsTxt)
@@ -58,7 +66,7 @@ func NewServer(conn *sql.DB, poller *rt.Poller) http.Handler {
 func withCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		// Consolidate search engine indexing exclusively on vizagtransit.duckdns.org
 		if strings.Contains(strings.ToLower(r.Host), "onrender.com") && !strings.HasPrefix(r.URL.Path, "/api/") {
@@ -387,9 +395,12 @@ func (s *Server) handleGetRoute(w http.ResponseWriter, r *http.Request) {
 
 	// 2. Shape coordinates
 	var coordsRaw string
-	var coords [][2]float64
+	coords := make([][2]float64, 0)
 	if err := s.db.QueryRowContext(r.Context(), `SELECT coords_json FROM route_shapes WHERE route_id = ?`, item.RouteID).Scan(&coordsRaw); err == nil {
 		_ = json.Unmarshal([]byte(coordsRaw), &coords)
+		if coords == nil {
+			coords = make([][2]float64, 0)
+		}
 	}
 
 	// 3. Direction / variant alternatives sharing the same passenger route number
@@ -557,6 +568,9 @@ func (s *Server) handleGetStop(w http.ResponseWriter, r *http.Request) {
 	}
 
 	live := s.poller.GetStopUpcoming(id)
+	if live == nil {
+		live = make([]rt.StopArrival, 0)
+	}
 	_, feedStatus := s.poller.Snapshot()
 
 	ist := time.FixedZone("IST", 5*3600+30*60)
@@ -816,8 +830,132 @@ func inferNextStopIdxFromGPS(lat, lon float64, stops []vehicleStopProgress) int 
 	return bestSeg
 }
 
+// resolveSearchQuery maps verified Vizag landmarks & Telugu place names to GTFS search terms.
+func resolveSearchQuery(raw string) string {
+	q := strings.TrimSpace(raw)
+	ql := strings.ToLower(q)
+	aliases := map[string]string{
+		"విశాఖపట్నం":        "Visakhapatnam",
+		"వైజాగ్":             "Visakhapatnam",
+		"ఆర్టీసీ కాంప్లెక్స్": "Rtc Complex",
+		"సింహాచలం":          "Simhachalam",
+		"గాజువాక":           "Gajuwaka",
+		"మద్దిలపాలెం":        "Maddilapalem",
+		"అనకాపల్లి":          "Anakapalli",
+		"భీమిలి":            "Bheemunipatnam",
+		"భీమునిపట్నం":       "Bheemunipatnam",
+		"ఆర్కే బీచ్":         "R.K.Beach",
+		"ఎయిర్పోర్ట్":        "Airport",
+		"విమానాశ్రయం":        "Airport",
+		"రైల్వే స్టేషన్":     "Railway Station",
+		"జగదాంబ":            "Jagadamba",
+		"గోపాలపట్నం":         "Gopalapatnam",
+		"పెందుర్తి":           "Pendurthi",
+		"కొత్తవలస":          "Kottavalasa",
+		"కూర్మన్నపాలెం":      "Kurmannapalem",
+		"రుషికొండ":           "Rushikonda",
+		"యలమంచిలి":          "Yelamanchili",
+		"bheemili":          "Bheemunipatnam",
+		"rk beach":          "R.K.Beach",
+		"r k beach":         "R.K.Beach",
+		"submarine":         "R.K.Beach",
+		"ins kurusura":      "R.K.Beach",
+		"steel plant":       "Kurmannapalem",
+		"ukku nagaram":      "Kurmannapalem",
+		"pm palem":          "Pothinamallayyapalem",
+		"mvp":               "Mvp Colony",
+		"nad":               "Nad X Road",
+		"vsp airport":       "Airport",
+		"elamanchili":       "Yelamanchili",
+	}
+	for k, v := range aliases {
+		if ql == k || strings.Contains(ql, k) {
+			return v
+		}
+	}
+	return q
+}
+
+func (s *Server) handleCreateReport(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	var req struct {
+		Kind      string `json:"kind"`
+		RouteID   string `json:"routeId"`
+		StopID    string `json:"stopId"`
+		VehicleID string `json:"vehicleId"`
+		Note      string `json:"note"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON payload")
+		return
+	}
+	validKinds := map[string]bool{
+		"bus_did_not_arrive":  true,
+		"bus_skipped_stop":    true,
+		"wrong_stop_location": true,
+		"wrong_route_info":    true,
+		"wrong_gps_position":  true,
+	}
+	if !validKinds[req.Kind] {
+		writeError(w, http.StatusBadRequest, "unsupported report category")
+		return
+	}
+	note := strings.TrimSpace(req.Note)
+	if len(note) > 300 {
+		note = note[:300]
+	}
+
+	// Rate limit per IP to prevent abuse (max 6 reports/hour, 10s cooldown)
+	ip := r.Header.Get("X-Forwarded-For")
+	if idx := strings.Index(ip, ","); idx > 0 {
+		ip = strings.TrimSpace(ip[:idx])
+	}
+	if ip == "" {
+		ip = r.RemoteAddr
+	}
+	now := time.Now().Unix()
+
+	s.reportMu.Lock()
+	recent := s.reportRate[ip]
+	kept := make([]int64, 0, len(recent))
+	for _, ts := range recent {
+		if now-ts < 3600 {
+			kept = append(kept, ts)
+		}
+	}
+	if len(kept) > 0 && now-kept[len(kept)-1] < 10 {
+		s.reportMu.Unlock()
+		writeError(w, http.StatusTooManyRequests, "please wait before submitting another report")
+		return
+	}
+	if len(kept) >= 6 {
+		s.reportMu.Unlock()
+		writeError(w, http.StatusTooManyRequests, "hourly report limit reached")
+		return
+	}
+	kept = append(kept, now)
+	s.reportRate[ip] = kept
+	s.reportMu.Unlock()
+
+	res, err := s.db.ExecContext(r.Context(), `
+		INSERT INTO passenger_reports(kind, route_id, stop_id, vehicle_id, note, created_at)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		req.Kind, req.RouteID, req.StopID, req.VehicleID, note, now)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to record report")
+		return
+	}
+	id, _ := res.LastInsertId()
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"id":         id,
+		"status":     "recorded_unverified",
+		"recordedAt": now,
+		"message":    "Thank you. Report recorded for review (unverified commuter feedback).",
+	})
+}
+
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
-	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	q := resolveSearchQuery(r.URL.Query().Get("q"))
 	if q == "" {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"catalogue": []any{},
