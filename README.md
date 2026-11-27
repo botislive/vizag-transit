@@ -2,6 +2,9 @@
 
 A local-first, real-time public transport tracker for **Visakhapatnam, Andhra Pradesh, India**, built with **Go + SQLite + SSE** on the backend and **React + TypeScript + Tailwind CSS + MapLibre GL JS** on the frontend.
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/botislive/vizag-transit)
+[![Deploy to Koyeb](https://www.koyeb.com/static/images/deploy/button.svg)](https://app.koyeb.com/deploy?type=git&repository=github.com/botislive/vizag-transit&branch=main&name=vizag-transit)
+
 ## Data Sources & Attribution
 
 - **Static GTFS**: APSRTC statewide feed (`apsrtc.zip`) from [`reclaimchennai/India_GTFS`](https://github.com/reclaimchennai/India_GTFS) (mirror: `https://maps.reclaim.city/gtfs/apsrtc.zip`).
