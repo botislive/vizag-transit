@@ -283,6 +283,19 @@ func EnsureImported(conn *sql.DB, cfg config.Config) error {
 		return fmt.Errorf("pass 2 stop_times: %w", err)
 	}
 
+	// Count shape_id frequency per route so we pick the primary/majority corridor
+	// instead of a 1-off outlier/detour trip that happens to have more stops.
+	routeShapeFreq := make(map[string]map[string]int)
+	for _, t := range vizagTrips {
+		if t.shapeID == "" {
+			continue
+		}
+		if routeShapeFreq[t.routeID] == nil {
+			routeShapeFreq[t.routeID] = make(map[string]int)
+		}
+		routeShapeFreq[t.routeID][t.shapeID]++
+	}
+
 	// Find canonical trip and endpoints (origin/destination) per Vizag route
 	canonicalTrip := make(map[string]rawTrip)
 	routeEndpoints := make(map[string][2]string) // rid -> [origin, destination]
@@ -291,7 +304,9 @@ func EnsureImported(conn *sql.DB, cfg config.Config) error {
 		cur, exists := canonicalTrip[t.routeID]
 		cnt := tripStopCount[t.tripID]
 		curCnt := tripStopCount[cur.tripID]
-		if !exists || cnt > curCnt || (cnt == curCnt && cur.shapeID == "" && t.shapeID != "") {
+		tFreq := routeShapeFreq[t.routeID][t.shapeID]
+		curFreq := routeShapeFreq[t.routeID][cur.shapeID]
+		if !exists || tFreq > curFreq || (tFreq == curFreq && (cnt > curCnt || (cnt == curCnt && cur.shapeID == "" && t.shapeID != ""))) {
 			canonicalTrip[t.routeID] = t
 		}
 	}
@@ -311,7 +326,7 @@ func EnsureImported(conn *sql.DB, cfg config.Config) error {
 	}
 
 	neededShapes := make(map[string]bool)
-	for _, t := range canonicalTrip {
+	for _, t := range vizagTrips {
 		if t.shapeID != "" {
 			neededShapes[t.shapeID] = true
 		}
