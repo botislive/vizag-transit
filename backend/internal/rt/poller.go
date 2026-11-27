@@ -494,15 +494,30 @@ func (p *Poller) pollOnce(ctx context.Context) {
 	var updated []Vehicle
 	var removed []string
 
+	// Grace period: keep vehicles that temporarily drop from a single GTFS-RT poll
+	// for up to 120s before removing them, preventing buses from flickering/disappearing.
+	const missingGraceSec = int64(120)
+	for id, prev := range p.vehicles {
+		if _, exists := nextVehicles[id]; !exists {
+			if now-prev.UpdatedAt < missingGraceSec {
+				if prev.GPSTimestamp > 0 {
+					prev.AgeSec = now - prev.GPSTimestamp
+					if prev.AgeSec < 0 {
+						prev.AgeSec = 0
+					}
+					prev.Freshness, prev.IsStale = ClassifyFreshness(prev.GPSTimestamp, now)
+				}
+				nextVehicles[id] = prev
+			} else {
+				removed = append(removed, id)
+			}
+		}
+	}
+
 	for id, v := range nextVehicles {
 		prev, exists := p.vehicles[id]
 		if !exists || vehicleChanged(prev, v) {
 			updated = append(updated, v)
-		}
-	}
-	for id := range p.vehicles {
-		if _, exists := nextVehicles[id]; !exists {
-			removed = append(removed, id)
 		}
 	}
 
