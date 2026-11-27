@@ -127,16 +127,19 @@ func (s *Server) handleJourney(w http.ResponseWriter, r *http.Request) {
 		if options[i].Transfers != options[j].Transfers {
 			return options[i].Transfers < options[j].Transfers
 		}
-		// Prefer routes with live buses running right now, then shorter duration
-		iLive := len(options[i].Legs[0].LiveBuses) > 0
-		jLive := len(options[j].Legs[0].LiveBuses) > 0
-		if iLive != jLive {
-			return iLive
+		// Prefer routes with live buses running right now (and more live buses higher)
+		iLiveCount := len(options[i].Legs[0].LiveBuses)
+		jLiveCount := len(options[j].Legs[0].LiveBuses)
+		if (iLiveCount > 0) != (jLiveCount > 0) {
+			return iLiveCount > 0
+		}
+		if iLiveCount != jLiveCount {
+			return iLiveCount > jLiveCount
 		}
 		return options[i].TotalMinutes < options[j].TotalMinutes
 	})
-	if len(options) > 12 {
-		options = options[:12]
+	if len(options) > 25 {
+		options = options[:25]
 	}
 
 	msg := ""
@@ -258,7 +261,7 @@ func (s *Server) findDirectJourneys(
 		WHERE r.is_vizag = 1 AND a.stop_id IN (` + inFrom + `) AND b.stop_id IN (` + inTo + `)
 		GROUP BY t.route_id
 		ORDER BY stops_cnt ASC, trip_cnt DESC
-		LIMIT 25`
+		LIMIT 40`
 
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {

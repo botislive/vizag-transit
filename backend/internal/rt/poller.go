@@ -121,10 +121,13 @@ type Poller struct {
 	db     *sql.DB
 	client *http.Client
 
-	routes     map[string]routeMeta
-	stops      map[string]stopMeta
-	trips      map[string]string   // trip_id -> headsign
-	routeStops map[string][]string // route_id -> ordered stop_ids
+	routes       map[string]routeMeta
+	stops        map[string]stopMeta
+	trips        map[string]string   // trip_id -> headsign
+	tripRoutes   map[string]string   // trip_id -> route_id
+	blockRoutes  map[string]string   // unambiguous block/duty code -> route_id
+	prefixRoutes map[string]string   // unambiguous route_id prefix -> route_id
+	routeStops   map[string][]string // route_id -> ordered stop_ids
 
 	mu          sync.RWMutex
 	vehicles    map[string]Vehicle
@@ -136,16 +139,19 @@ type Poller struct {
 // NewPoller creates a Poller and loads static GTFS lookup maps from SQLite.
 func NewPoller(conn *sql.DB, cfg config.Config) (*Poller, error) {
 	p := &Poller{
-		cfg:         cfg,
-		db:          conn,
-		client:      &http.Client{Timeout: 12 * time.Second},
-		routes:      make(map[string]routeMeta),
-		stops:       make(map[string]stopMeta),
-		trips:       make(map[string]string),
-		routeStops:  make(map[string][]string),
-		vehicles:    make(map[string]Vehicle),
-		tripUpdates: make(map[string][]tripUpdateStop),
-		subs:        make(map[chan DeltaEvent]struct{}),
+		cfg:          cfg,
+		db:           conn,
+		client:       &http.Client{Timeout: 12 * time.Second},
+		routes:       make(map[string]routeMeta),
+		stops:        make(map[string]stopMeta),
+		trips:        make(map[string]string),
+		tripRoutes:   make(map[string]string),
+		blockRoutes:  make(map[string]string),
+		prefixRoutes: make(map[string]string),
+		routeStops:   make(map[string][]string),
+		vehicles:     make(map[string]Vehicle),
+		tripUpdates:  make(map[string][]tripUpdateStop),
+		subs:         make(map[chan DeltaEvent]struct{}),
 	}
 	if err := p.loadStaticLookups(); err != nil {
 		return nil, err
@@ -154,6 +160,7 @@ func NewPoller(conn *sql.DB, cfg config.Config) (*Poller, error) {
 }
 
 func (p *Poller) loadStaticLookups() error {
+	prefixCandidates := make(map[string]map[string]string) // prefix -> shortName -> routeID
 	rows, err := p.db.Query(`SELECT route_id, short_name, long_name, is_vizag FROM routes`)
 	if err != nil {
 		return fmt.Errorf("load routes: %w", err)
@@ -163,9 +170,25 @@ func (p *Poller) loadStaticLookups() error {
 		var iv int
 		if err := rows.Scan(&id, &sn, &ln, &iv); err == nil {
 			p.routes[id] = routeMeta{shortName: sn, longName: ln, isVizag: iv == 1}
+			if iv == 1 {
+				if dash := strings.IndexByte(id, '-'); dash > 0 {
+					pfx := strings.ToUpper(id[:dash])
+					if prefixCandidates[pfx] == nil {
+						prefixCandidates[pfx] = make(map[string]string)
+					}
+					prefixCandidates[pfx][sn] = id
+				}
+			}
 		}
 	}
 	rows.Close()
+	for pfx, shorts := range prefixCandidates {
+		if len(shorts) == 1 {
+			for _, rid := range shorts {
+				p.prefixRoutes[pfx] = rid
+			}
+		}
+	}
 
 	srows, err := p.db.Query(`SELECT stop_id, name, lat, lon FROM stops`)
 	if err != nil {
@@ -180,17 +203,35 @@ func (p *Poller) loadStaticLookups() error {
 	}
 	srows.Close()
 
-	trows, err := p.db.Query(`SELECT trip_id, headsign FROM trips`)
+	blockShorts := make(map[string]map[string]string) // blockCode -> shortName -> routeID
+	trows, err := p.db.Query(`SELECT trip_id, route_id, headsign FROM trips`)
 	if err != nil {
 		return fmt.Errorf("load trips: %w", err)
 	}
 	for trows.Next() {
-		var id, hs string
-		if err := trows.Scan(&id, &hs); err == nil {
+		var id, rid, hs string
+		if err := trows.Scan(&id, &rid, &hs); err == nil {
 			p.trips[id] = hs
+			p.tripRoutes[id] = rid
+			if rm, ok := p.routes[rid]; ok && rm.isVizag {
+				if us := strings.IndexByte(id, '_'); us > 0 {
+					blk := strings.ToUpper(id[:us])
+					if blockShorts[blk] == nil {
+						blockShorts[blk] = make(map[string]string)
+					}
+					blockShorts[blk][rm.shortName] = rid
+				}
+			}
 		}
 	}
 	trows.Close()
+	for blk, shorts := range blockShorts {
+		if len(shorts) == 1 {
+			for _, rid := range shorts {
+				p.blockRoutes[blk] = rid
+			}
+		}
+	}
 
 	rsrows, err := p.db.Query(`SELECT route_id, stop_id FROM route_stops ORDER BY route_id, stop_sequence`)
 	if err != nil {
@@ -376,9 +417,50 @@ func (p *Poller) pollOnce(ctx context.Context) {
 			continue
 		}
 
+		vid := ent.GetId()
+		if vp.GetVehicle() != nil && vp.GetVehicle().GetId() != "" {
+			vid = vp.GetVehicle().GetId()
+		}
 		tripID := vp.GetTrip().GetTripId()
 		routeID := vp.GetTrip().GetRouteId()
 		rm, hasRoute := p.routes[routeID]
+		if !hasRoute && tripID != "" {
+			if trid, ok := p.tripRoutes[tripID]; ok {
+				if trm, ok2 := p.routes[trid]; ok2 {
+					routeID = trid
+					rm = trm
+					hasRoute = true
+				}
+			}
+		}
+		if !hasRoute && vid != "" {
+			parts := strings.Split(vid, "_")
+			if len(parts) >= 4 {
+				tripCand := parts[1] + "_" + parts[2] + "_" + parts[3]
+				if trid, ok := p.tripRoutes[tripCand]; ok {
+					if trm, ok2 := p.routes[trid]; ok2 && trm.isVizag {
+						routeID = trid
+						rm = trm
+						hasRoute = true
+						if tripID == "" {
+							tripID = tripCand
+						}
+					}
+				}
+			}
+			if !hasRoute && len(parts) >= 2 {
+				code := strings.ToUpper(parts[1])
+				if brid, ok := p.blockRoutes[code]; ok {
+					routeID = brid
+					rm = p.routes[brid]
+					hasRoute = true
+				} else if prid, ok := p.prefixRoutes[code]; ok {
+					routeID = prid
+					rm = p.routes[prid]
+					hasRoute = true
+				}
+			}
+		}
 		inBBox := config.InVizagBBox(lat, lon)
 
 		// Filter to Visakhapatnam: inside metro bbox OR assigned to a Vizag route
@@ -405,10 +487,6 @@ func (p *Poller) pollOnce(ctx context.Context) {
 			freshCount++
 		}
 
-		vid := ent.GetId()
-		if vp.GetVehicle() != nil && vp.GetVehicle().GetId() != "" {
-			vid = vp.GetVehicle().GetId()
-		}
 		label := ""
 		plate := ""
 		if vp.GetVehicle() != nil {

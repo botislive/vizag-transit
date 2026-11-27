@@ -421,12 +421,41 @@ export function ExplorePanel({
             )}
 
             {journeys && journeys.length > 0 && (
-              <div className="mt-3 space-y-2.5">
+              <div className="mt-3 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-[11px] font-semibold tracking-wide text-[#737373] uppercase dark:text-neutral-400">
-                    {journeys.length} {journeys.length === 1 ? 'route' : 'routes'} available
-                  </span>
-                  <div className="flex items-center gap-1.5">
+                  <div>
+                    <span className="text-[11px] font-semibold tracking-wide text-[#737373] uppercase dark:text-neutral-400">
+                      {journeys.length} {journeys.length === 1 ? 'route' : 'routes'} available
+                    </span>
+                    {(() => {
+                      const totalLive = journeys.reduce(
+                        (sum, j) => sum + (j.legs[0]?.liveBuses?.length ?? 0),
+                        0,
+                      );
+                      return totalLive > 0 ? (
+                        <div className="text-xs font-semibold text-[#176B52] dark:text-emerald-400">
+                          {totalLive} live {totalLive === 1 ? 'bus' : 'buses'} found
+                        </div>
+                      ) : null;
+                    })()}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {journeys.some((j) => (j.legs[0]?.liveBuses?.length ?? 0) > 0) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const bestWithLive =
+                            journeys.find((j) => (j.legs[0]?.liveBuses?.length ?? 0) > 0) ?? journeys[0];
+                          if (bestWithLive?.legs[0]) {
+                            onSelectRoute(bestWithLive.legs[0].routeId);
+                          }
+                        }}
+                        className="inline-flex min-h-[32px] items-center gap-1 rounded-md border border-[#176B52]/30 bg-[#eaf3f0] px-2.5 py-1 text-[11px] font-semibold text-[#176B52] transition hover:bg-[#d8ebe4] dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+                      >
+                        <Radio className="h-3 w-3" aria-hidden="true" />
+                        <span>Show live on map</span>
+                      </button>
+                    )}
                     {onSaveJourney && (
                       <button
                         type="button"
@@ -506,51 +535,76 @@ export function ExplorePanel({
                       </div>
                     </div>
 
-                    {j.legs.map((leg, li) => (
-                      <div key={li} className="space-y-2 border-t border-[#E5E7EB] pt-2 first:border-t-0 first:pt-0 dark:border-neutral-700/60">
-                        <div className="flex items-start justify-between gap-2 text-xs text-[#171717] dark:text-neutral-200">
-                          <span className="leading-snug font-medium">
-                            {leg.fromStopName} → {leg.toStopName}
-                          </span>
-                          <span className="shrink-0 text-[11px] text-[#737373] dark:text-neutral-400">
-                            {leg.stopCount} stops
-                          </span>
-                        </div>
+                    {j.legs.map((leg, li) => {
+                      const destLabel =
+                        leg.longName.split(/[–-]/).pop()?.trim() || leg.toStopName;
+                      const isFirstTransfer = j.type === 'transfer' && li === 0;
+                      const boardText = isFirstTransfer
+                        ? `Board at ${leg.fromStopName} · Get off & transfer at ${leg.toStopName}`
+                        : `Board at ${leg.fromStopName} · Get off at ${leg.toStopName}`;
+                      return (
+                        <div key={li} className="space-y-2 border-t border-[#E5E7EB] pt-2 first:border-t-0 first:pt-0 dark:border-neutral-700/60">
+                          <div className="flex items-start justify-between gap-2 text-xs text-[#171717] dark:text-neutral-200">
+                            <div className="min-w-0">
+                              <div className="font-semibold leading-snug">
+                                Towards {destLabel}
+                              </div>
+                              <div className="mt-0.5 text-[11px] leading-snug text-[#525252] dark:text-neutral-300">
+                                {boardText}
+                              </div>
+                            </div>
+                            <span className="shrink-0 text-[11px] text-[#737373] dark:text-neutral-400">
+                              {leg.stopCount} stops
+                            </span>
+                          </div>
 
-                        {/* Live Buses Running on This Route */}
-                        {leg.liveBuses && leg.liveBuses.length > 0 ? (
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-[#176B52] uppercase dark:text-emerald-400">
-                              <Radio className="h-3 w-3" aria-hidden="true" />
-                              <span>{leg.liveBuses.length} Live {leg.liveBuses.length === 1 ? 'Bus' : 'Buses'} Running</span>
-                            </div>
+                          {/* Live Buses Running on This Route */}
+                          {leg.liveBuses && leg.liveBuses.length > 0 ? (
                             <div className="space-y-1">
-                              {leg.liveBuses.slice(0, 3).map((b) => (
-                                <button
-                                  key={b.vehicleId}
-                                  type="button"
-                                  onClick={() => onSelectVehicle(b.vehicleId)}
-                                  className="flex min-h-[38px] w-full items-center justify-between gap-2 rounded-lg border border-[#E5E7EB] bg-white px-2.5 py-1.5 text-left transition hover:border-[#176B52] dark:border-neutral-700 dark:bg-neutral-900"
-                                >
-                                  <div className="flex min-w-0 items-center gap-1.5">
-                                    <Bus className="h-3.5 w-3.5 shrink-0 text-[#176B52] dark:text-emerald-400" aria-hidden="true" />
-                                    <StatusBadge freshness={b.freshness} size="sm" />
-                                    <span className="truncate text-[11px] text-[#171717] dark:text-neutral-200">
-                                      {b.nextStopName ? `Next: ${b.nextStopName}` : b.label}
-                                    </span>
-                                  </div>
-                                  <span className="font-mono-num shrink-0 text-[11px] font-semibold text-[#176B52] dark:text-emerald-400">
-                                    {b.etaSec ? formatETA(b.etaSec) : formatRelativeAge(b.ageSec)}
-                                  </span>
-                                </button>
-                              ))}
+                              <div className="flex items-center gap-1 text-[10px] font-semibold tracking-wide text-[#176B52] uppercase dark:text-emerald-400">
+                                <Radio className="h-3 w-3" aria-hidden="true" />
+                                <span>{leg.liveBuses.length} Live {leg.liveBuses.length === 1 ? 'Bus' : 'Buses'} Running</span>
+                              </div>
+                              <div className="space-y-1.5">
+                                {leg.liveBuses.slice(0, 4).map((b) => (
+                                  <button
+                                    key={b.vehicleId}
+                                    type="button"
+                                    onClick={() => onSelectVehicle(b.vehicleId)}
+                                    className="flex min-h-[46px] w-full items-center justify-between gap-2 rounded-lg border border-[#E5E7EB] bg-white px-2.5 py-2 text-left transition hover:border-[#176B52] dark:border-neutral-700 dark:bg-neutral-900"
+                                  >
+                                    <div className="min-w-0 flex-1 space-y-0.5">
+                                      <div className="flex flex-wrap items-center gap-1.5">
+                                        <Bus className="h-3.5 w-3.5 shrink-0 text-[#176B52] dark:text-emerald-400" aria-hidden="true" />
+                                        <StatusBadge freshness={b.freshness} size="sm" />
+                                        <span className="font-mono-num text-[11px] font-semibold text-[#171717] dark:text-neutral-100">
+                                          {b.registrationNumber || b.label}
+                                        </span>
+                                        {b.nextStopName && (
+                                          <span className="text-[11px] text-[#525252] dark:text-neutral-300">
+                                            · Next: {b.nextStopName}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="text-[11px] leading-snug text-[#737373] dark:text-neutral-400">
+                                        {boardText}
+                                      </div>
+                                    </div>
+                                    <div className="flex shrink-0 items-center gap-1">
+                                      <span className="font-mono-num text-[11px] font-semibold text-[#176B52] dark:text-emerald-400">
+                                        {b.etaSec ? formatETA(b.etaSec) : formatRelativeAge(b.ageSec)}
+                                      </span>
+                                      <ChevronRight className="h-3.5 w-3.5 text-[#737373]" aria-hidden="true" />
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        ) : (
-                          <div className="text-[11px] text-[#737373] dark:text-neutral-400">
-                            No live buses running right now
-                          </div>
-                        )}
+                          ) : (
+                            <div className="text-[11px] text-[#737373] dark:text-neutral-400">
+                              No live buses running right now
+                            </div>
+                          )}
 
                         {/* Upcoming Scheduled Buses */}
                         {leg.scheduledTrips && leg.scheduledTrips.length > 0 ? (
@@ -586,7 +640,8 @@ export function ExplorePanel({
                           ) : null
                         )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ))}
               </div>

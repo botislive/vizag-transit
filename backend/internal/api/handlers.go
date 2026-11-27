@@ -969,14 +969,29 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	like := "%" + q + "%"
 	prefix := q + "%"
 
+	// Count live vehicles per route and short name so search results show accurate live counts
+	allVehicles, _ := s.poller.Snapshot()
+	activeByRoute := make(map[string]int)
+	activeByShort := make(map[string]int)
+	for _, v := range allVehicles {
+		if !v.IsStale {
+			if v.RouteID != "" {
+				activeByRoute[v.RouteID]++
+			}
+			if v.RouteShortName != "" {
+				activeByShort[v.RouteShortName]++
+			}
+		}
+	}
+
 	// 1. Catalogue passenger routes
 	crows, err := s.db.QueryContext(r.Context(), `
 		SELECT route_number, primary_route_id, primary_long_name, classification, confidence, variant_count, total_trips, total_stops, origin, destination
 		FROM route_catalogue
 		WHERE route_number LIKE ? OR primary_long_name LIKE ? OR origin LIKE ? OR destination LIKE ?
-		ORDER BY (route_number LIKE ?) DESC, total_trips DESC
+		ORDER BY (route_number = ? COLLATE NOCASE) DESC, (route_number LIKE ?) DESC, total_trips DESC
 		LIMIT 10
-	`, like, like, like, like, prefix)
+	`, like, like, like, like, q, prefix)
 	catalogueResults := make([]CatalogueEntry, 0)
 	if err == nil {
 		for crows.Next() {
@@ -986,6 +1001,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 				&ce.Classification, &ce.Confidence, &ce.VariantCount,
 				&ce.TotalTrips, &ce.TotalStops, &ce.Origin, &ce.Destination,
 			); err == nil {
+				ce.ActiveVehicles = activeByShort[ce.RouteNumber]
 				catalogueResults = append(catalogueResults, ce)
 			}
 		}
@@ -997,8 +1013,8 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		`SELECT route_id, short_name, long_name, category, classification, confidence, origin, destination, route_desc, stop_count, trip_count
 		 FROM routes
 		 WHERE is_vizag = 1 AND (short_name LIKE ? OR long_name LIKE ? OR origin LIKE ? OR destination LIKE ?)
-		 ORDER BY (short_name LIKE ?) DESC, trip_count DESC
-		 LIMIT 10`, like, like, like, like, prefix)
+		 ORDER BY (short_name = ? COLLATE NOCASE) DESC, (short_name LIKE ?) DESC, trip_count DESC
+		 LIMIT 12`, like, like, like, like, q, prefix)
 	routes := make([]routeSummary, 0)
 	if err == nil {
 		for rrows.Next() {
@@ -1008,6 +1024,10 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 				&rs.Classification, &rs.Confidence, &rs.Origin, &rs.Destination,
 				&rs.RouteDesc, &rs.StopCount, &rs.TripCount,
 			); err == nil {
+				rs.ActiveVehicles = activeByRoute[rs.RouteID]
+				if rs.ActiveVehicles == 0 && activeByShort[rs.ShortName] > 0 {
+					rs.ActiveVehicles = activeByShort[rs.ShortName]
+				}
 				routes = append(routes, rs)
 			}
 		}
@@ -1034,18 +1054,18 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		srows.Close()
 	}
 
-	// 4. Vehicles (search by plate/registration, label, route number)
+	// 4. Vehicles (search by plate/registration, label, route number, or route name)
 	ql := strings.ToLower(q)
-	allVehicles, _ := s.poller.Snapshot()
 	matchedVehicles := make([]rt.Vehicle, 0)
 	for _, v := range allVehicles {
 		if strings.Contains(strings.ToLower(v.RegistrationNumber), ql) ||
 			strings.Contains(strings.ToLower(v.DisplayLabel), ql) ||
 			strings.Contains(strings.ToLower(v.LicensePlate), ql) ||
 			strings.Contains(strings.ToLower(v.RouteShortName), ql) ||
+			strings.Contains(strings.ToLower(v.RouteLongName), ql) ||
 			strings.Contains(strings.ToLower(v.VehicleID), ql) {
 			matchedVehicles = append(matchedVehicles, v)
-			if len(matchedVehicles) >= 8 {
+			if len(matchedVehicles) >= 12 {
 				break
 			}
 		}
