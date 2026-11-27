@@ -684,9 +684,27 @@ func (s *Server) handleGetVehicle(w http.ResponseWriter, r *http.Request) {
 		destination = stops[len(stops)-1].Name
 	}
 
+	// Resolve exact trip shape if available, falling back to canonical route shape
+	var shape [][2]float64
+	var shapeRaw string
+	if v.TripID != "" {
+		_ = s.db.QueryRowContext(r.Context(), `
+			SELECT sh.coords_json
+			FROM trips t
+			JOIN shapes sh ON sh.shape_id = t.shape_id
+			WHERE t.trip_id = ?`, v.TripID).Scan(&shapeRaw)
+	}
+	if shapeRaw == "" && v.RouteID != "" {
+		_ = s.db.QueryRowContext(r.Context(), `SELECT coords_json FROM route_shapes WHERE route_id = ?`, v.RouteID).Scan(&shapeRaw)
+	}
+	if shapeRaw != "" {
+		_ = json.Unmarshal([]byte(shapeRaw), &shape)
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"vehicle":     v,
 		"stops":       stops,
+		"shape":       shape,
 		"origin":      origin,
 		"destination": destination,
 	})

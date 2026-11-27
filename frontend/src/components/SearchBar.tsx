@@ -8,6 +8,8 @@ interface SearchBarProps {
   recent?: SavedItem[];
   onSelectRoute: (routeId: string) => void;
   onSelectStop: (stopId: string) => void;
+  onClose?: () => void;
+  autoFocus?: boolean;
   placeholder?: string;
 }
 
@@ -21,16 +23,24 @@ export function SearchBar({
   recent = [],
   onSelectRoute,
   onSelectStop,
+  onClose,
+  autoFocus = false,
   placeholder = 'Search route number, destination or bus stop...',
 }: SearchBarProps) {
   const [query, setQuery] = useState('');
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(autoFocus);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<SearchResponse | null>(null);
   const [activeIndex, setActiveIndex] = useState(-1);
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (autoFocus) {
+      inputRef.current?.focus();
+    }
+  }, [autoFocus]);
 
   useEffect(() => {
     const onDocClick = (e: MouseEvent) => {
@@ -142,15 +152,17 @@ export function SearchBar({
     }
     setOpen(false);
     inputRef.current?.blur();
+    onClose?.();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (!open) {
-      if (e.key === 'ArrowDown') setOpen(true);
-      return;
-    }
     if (e.key === 'Escape') {
       setOpen(false);
+      onClose?.();
+      return;
+    }
+    if (!open) {
+      if (e.key === 'ArrowDown') setOpen(true);
       return;
     }
     if (e.key === 'ArrowDown') {

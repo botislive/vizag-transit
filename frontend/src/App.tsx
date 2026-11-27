@@ -1,5 +1,5 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
-import { Bookmark, ChevronDown, ChevronUp, Compass, Route } from 'lucide-react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Bookmark, Bus, Compass, MapPin, Route, Search, X } from 'lucide-react';
 import { api } from './lib/api';
 import { useLiveVehicles } from './hooks/useLiveVehicles';
 import { useSavedAndRecent } from './hooks/useSavedItems';
@@ -15,19 +15,35 @@ import type {
 } from './types/transit';
 import { TransitMap } from './components/TransitMap';
 import { SearchBar } from './components/SearchBar';
-import { ExplorePanel } from './components/ExplorePanel';
 import { DetailDrawer } from './components/DetailDrawer';
 import { FeedHealthBanner } from './components/ui/StatusBadge';
 
-// Lazy-load secondary tabs to keep initial bundle lean on mobile networks
+// Lazy-load panels so initial map view stays ultra-light
+const ExplorePanel = lazy(() =>
+  import('./components/ExplorePanel').then((m) => ({ default: m.ExplorePanel })),
+);
 const RoutesPanel = lazy(() =>
   import('./components/RoutesPanel').then((m) => ({ default: m.RoutesPanel })),
+);
+const StopsPanel = lazy(() =>
+  import('./components/StopsPanel').then((m) => ({ default: m.StopsPanel })),
+);
+const BusesPanel = lazy(() =>
+  import('./components/BusesPanel').then((m) => ({ default: m.BusesPanel })),
 );
 const SavedPanel = lazy(() =>
   import('./components/SavedPanel').then((m) => ({ default: m.SavedPanel })),
 );
 
 const VIZAG_DEFAULT_LOC = { lat: 17.73615, lon: 83.32006 }; // Maddilapalem
+
+const PANEL_TITLES: Record<NavTab, string> = {
+  routes: 'Routes',
+  stops: 'Bus Stops',
+  buses: 'Live Buses',
+  plan: 'Trip Planner',
+  saved: 'Saved',
+};
 
 export default function App() {
   const [dark, setDark] = useState<boolean>(() => {
@@ -64,10 +80,13 @@ export default function App() {
   const { vehiclesMap, status: feedStatus, connected: sseConnected } = useLiveVehicles();
   const { saved, recent, isSaved, toggleSave, recordRecent } = useSavedAndRecent();
 
-  const [tab, setTab] = useState<NavTab>('explore');
+  // Map-first: no panel open on initial load
+  const [activeTab, setActiveTab] = useState<NavTab | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchWrapRef = useRef<HTMLDivElement>(null);
+
   const [selection, setSelection] = useState<Selection>(null);
   const [history, setHistory] = useState<Selection[]>([]);
-  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
 
   const [stops, setStops] = useState<StopItem[]>([]);
   const [popularRoutes, setPopularRoutes] = useState<RouteSummary[]>([]);
@@ -88,6 +107,41 @@ export default function App() {
   const [followVehicle, setFollowVehicle] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+
+  // Keyboard shortcut (Cmd/Ctrl+K or /) to open floating search
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const inInput =
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.isContentEditable;
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchOpen((o) => !o);
+      } else if (!inInput && e.key === '/') {
+        e.preventDefault();
+        setSearchOpen(true);
+      } else if (e.key === 'Escape' && searchOpen) {
+        setSearchOpen(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [searchOpen]);
+
+  // Close search popover when clicking outside
+  useEffect(() => {
+    if (!searchOpen) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (searchWrapRef.current && !searchWrapRef.current.contains(e.target as Node)) {
+        setSearchOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [searchOpen]);
 
   // Initial static data load (Vizag stops + popular routes)
   useEffect(() => {
@@ -146,7 +200,7 @@ export default function App() {
       setVehicleMeta({});
       setFollowVehicle(false);
       setDetailError(null);
-      setMobileSheetOpen(true);
+      setSearchOpen(false);
       const v = vehiclesMap.get(id);
       if (v) {
         setFlyToTarget({ lat: v.lat, lon: v.lon, zoom: 15, ts: Date.now() });
@@ -160,7 +214,24 @@ export default function App() {
           setVehicleStops(vehRes.stops);
           setVehicleMeta({ origin: vehRes.origin, destination: vehRes.destination });
         }
-        setRouteDetail(routeRes);
+        if (routeRes && vehRes) {
+          const patchedRoute = { ...routeRes };
+          if (vehRes.shape && vehRes.shape.length >= 2) {
+            patchedRoute.shape = vehRes.shape;
+          }
+          if (vehRes.stops && vehRes.stops.length >= 2) {
+            patchedRoute.stops = vehRes.stops.map((s) => ({
+              sequence: s.sequence,
+              stopId: s.stopId,
+              name: s.name,
+              lat: s.lat,
+              lon: s.lon,
+            }));
+          }
+          setRouteDetail(patchedRoute);
+        } else {
+          setRouteDetail(routeRes);
+        }
       } catch {
         setRouteDetail(null);
       }
@@ -182,7 +253,7 @@ export default function App() {
       setStopDetail(null);
       setDetailLoading(true);
       setDetailError(null);
-      setMobileSheetOpen(true);
+      setSearchOpen(false);
       try {
         const detail = await api.getRoute(id);
         setRouteDetail(detail);
@@ -207,7 +278,7 @@ export default function App() {
       setRouteDetail(null);
       setDetailLoading(true);
       setDetailError(null);
-      setMobileSheetOpen(true);
+      setSearchOpen(false);
       try {
         const detail = await api.getStop(id);
         setStopDetail(detail);
@@ -237,6 +308,11 @@ export default function App() {
     setFollowVehicle(false);
     setDetailError(null);
   }, []);
+
+  const closeAll = useCallback(() => {
+    closeSelection();
+    setActiveTab(null);
+  }, [closeSelection]);
 
   const handleBack = useCallback(() => {
     if (history.length === 0) {
@@ -289,44 +365,77 @@ export default function App() {
       })
       .catch(() => {});
     if (followVehicle && selectedVehicle.freshness === 'fresh') {
-      setFlyToTarget({ lat: selectedVehicle.lat, lon: selectedVehicle.lon, zoom: 15.2, ts: Date.now() });
+      setFlyToTarget({
+        lat: selectedVehicle.lat,
+        lon: selectedVehicle.lon,
+        zoom: 15.2,
+        ts: Date.now(),
+      });
     }
     return () => ctrl.abort();
   }, [selection?.kind, selectedVehicle?.vehicleId, selectedVehicle?.gpsTimestamp, followVehicle]);
 
-  // Strict 3-destination navigation
-  const navItems: { id: NavTab; label: string; icon: React.ReactNode }[] = [
-    { id: 'explore', label: 'Explore', icon: <Compass className="h-4 w-4" aria-hidden="true" /> },
+  // 4-item clean bottom dock matching reference UI
+  const dockItems: { id: Exclude<NavTab, 'saved'>; label: string; icon: React.ReactNode }[] = [
     { id: 'routes', label: 'Routes', icon: <Route className="h-4 w-4" aria-hidden="true" /> },
-    { id: 'saved', label: 'Saved', icon: <Bookmark className="h-4 w-4" aria-hidden="true" /> },
+    { id: 'stops', label: 'Stops', icon: <MapPin className="h-4 w-4" aria-hidden="true" /> },
+    { id: 'buses', label: 'Buses', icon: <Bus className="h-4 w-4" aria-hidden="true" /> },
+    { id: 'plan', label: 'Plan', icon: <Compass className="h-4 w-4" aria-hidden="true" /> },
   ];
 
-  const renderTabContent = () => {
-    switch (tab) {
-      case 'explore':
-        return (
-          <ExplorePanel
-            feedStatus={feedStatus}
-            nearbyStops={nearbyStops}
-            popularRoutes={popularRoutes}
-            recent={recent}
-            userLocation={userLocation}
-            locationDenied={locationDenied}
-            onLocateMe={handleLocateMe}
-            onSelectRoute={handleSelectRoute}
-            onSelectStop={handleSelectStop}
-            onSelectVehicle={handleSelectVehicle}
-          />
-        );
+  const handleDockClick = (id: Exclude<NavTab, 'saved'>) => {
+    if (selection) {
+      closeSelection();
+      setActiveTab(id);
+      return;
+    }
+    setActiveTab((prev) => (prev === id ? null : id));
+  };
+
+  const renderPanelContent = () => {
+    const loadingFallback = (
+      <div className="p-8 text-center text-xs text-[#737373]">Loading…</div>
+    );
+
+    switch (activeTab) {
       case 'routes':
         return (
-          <Suspense fallback={<div className="p-8 text-center text-xs text-[#737373]">Loading routes…</div>}>
+          <Suspense fallback={loadingFallback}>
             <RoutesPanel onSelectRoute={handleSelectRoute} />
+          </Suspense>
+        );
+      case 'stops':
+        return (
+          <Suspense fallback={loadingFallback}>
+            <StopsPanel stops={stops} onSelectStop={handleSelectStop} />
+          </Suspense>
+        );
+      case 'buses':
+        return (
+          <Suspense fallback={loadingFallback}>
+            <BusesPanel vehiclesMap={vehiclesMap} onSelectVehicle={handleSelectVehicle} />
+          </Suspense>
+        );
+      case 'plan':
+        return (
+          <Suspense fallback={loadingFallback}>
+            <ExplorePanel
+              feedStatus={feedStatus}
+              nearbyStops={nearbyStops}
+              popularRoutes={popularRoutes}
+              recent={recent}
+              userLocation={userLocation}
+              locationDenied={locationDenied}
+              onLocateMe={handleLocateMe}
+              onSelectRoute={handleSelectRoute}
+              onSelectStop={handleSelectStop}
+              onSelectVehicle={handleSelectVehicle}
+            />
           </Suspense>
         );
       case 'saved':
         return (
-          <Suspense fallback={<div className="p-8 text-center text-xs text-[#737373]">Loading saved…</div>}>
+          <Suspense fallback={loadingFallback}>
             <SavedPanel
               saved={saved}
               onSelectRoute={handleSelectRoute}
@@ -335,67 +444,117 @@ export default function App() {
             />
           </Suspense>
         );
+      default:
+        return null;
     }
   };
 
+  const drawerOpen = Boolean(selection || activeTab);
+
   return (
-    <div className="flex h-full w-full flex-col bg-white md:flex-row dark:bg-neutral-950">
-      {/* DESKTOP SIDEBAR (~360px) */}
-      <aside
-        aria-label="Transit navigation and details"
-        className="hidden h-full w-[360px] shrink-0 flex-col border-r border-[#E5E7EB] bg-white md:flex dark:border-neutral-800 dark:bg-neutral-950"
+    <div className="relative h-full w-full overflow-hidden bg-[#f4f6f8] dark:bg-neutral-950">
+      {/* FULL-BLEED MAP CANVAS */}
+      <TransitMap
+        vehiclesMap={vehiclesMap}
+        stops={stops}
+        selectedRoute={routeDetail}
+        selection={selection}
+        userLocation={userLocation}
+        dark={dark}
+        feedStatus={feedStatus}
+        sseConnected={sseConnected}
+        onToggleTheme={() => setDark((d) => !d)}
+        onSelectVehicle={handleSelectVehicle}
+        onSelectStop={handleSelectStop}
+        onLocateMe={handleLocateMe}
+        onClearRoute={handleClearRoute}
+        flyToTarget={flyToTarget}
+      />
+
+      {/* TOP-LEFT FLOATING BRAND + SEARCH PILL */}
+      <div
+        ref={searchWrapRef}
+        className="pointer-events-none fixed top-3.5 left-3.5 z-30 flex flex-col items-start gap-2"
       >
-        <header className="space-y-3 border-b border-[#E5E7EB] p-4 dark:border-neutral-800">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#176B52] text-xs font-bold text-white">
-                VT
-              </div>
-              <div>
-                <h1 className="text-sm font-semibold tracking-tight text-[#171717] dark:text-neutral-100">
-                  Vizag Transit
-                </h1>
-                <p className="text-[11px] text-[#737373]">APSRTC Visakhapatnam</p>
-              </div>
-            </div>
+        <div className="pointer-events-auto flex h-11 items-center gap-1.5 rounded-2xl border border-black/10 bg-white/95 px-2 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-neutral-900/95">
+          <button
+            type="button"
+            onClick={closeAll}
+            title="VizagTransit — Reset panels"
+            className="flex items-center gap-2 rounded-xl px-1.5 py-1 text-left transition hover:bg-[#F5F6F8] dark:hover:bg-neutral-800"
+          >
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#176B52] text-white shadow-2xs">
+              <Bus className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <span className="text-[13px] font-semibold tracking-tight text-[#171717] dark:text-neutral-100">
+              VizagTransit
+            </span>
+          </button>
+
+          <span className="h-5 w-px bg-black/10 dark:bg-white/10" aria-hidden="true" />
+
+          <button
+            type="button"
+            onClick={() => setSearchOpen((o) => !o)}
+            aria-expanded={searchOpen}
+            aria-label="Search routes and stops"
+            className={`flex h-8 items-center gap-1.5 rounded-xl px-2.5 text-xs font-medium transition ${
+              searchOpen
+                ? 'bg-[#eaf3f0] text-[#176B52] dark:bg-emerald-500/15 dark:text-emerald-300'
+                : 'text-[#525252] hover:bg-[#F5F6F8] hover:text-[#171717] dark:text-neutral-300 dark:hover:bg-neutral-800'
+            }`}
+          >
+            <Search className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>Search</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (selection) closeSelection();
+              setActiveTab((prev) => (prev === 'saved' ? null : 'saved'));
+              setSearchOpen(false);
+            }}
+            aria-label="Saved routes and stops"
+            title="Saved routes & stops"
+            className={`relative flex h-8 w-8 items-center justify-center rounded-xl transition ${
+              activeTab === 'saved' && !selection
+                ? 'bg-[#eaf3f0] text-[#176B52] dark:bg-emerald-500/15 dark:text-emerald-300'
+                : 'text-[#525252] hover:bg-[#F5F6F8] hover:text-[#171717] dark:text-neutral-300 dark:hover:bg-neutral-800'
+            }`}
+          >
+            <Bookmark className="h-3.5 w-3.5" aria-hidden="true" />
+            {saved.length > 0 && (
+              <span
+                aria-hidden="true"
+                className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-[#176B52] dark:bg-emerald-400"
+              />
+            )}
+          </button>
+        </div>
+
+        {/* Floating Search Dropdown Card */}
+        {searchOpen && (
+          <div className="pointer-events-auto w-[min(360px,calc(100vw-28px))] rounded-2xl border border-black/10 bg-white/95 p-2 shadow-xl backdrop-blur-md dark:border-white/10 dark:bg-neutral-900/95">
+            <SearchBar
+              recent={recent}
+              autoFocus
+              onClose={() => setSearchOpen(false)}
+              onSelectRoute={handleSelectRoute}
+              onSelectStop={handleSelectStop}
+            />
           </div>
+        )}
+      </div>
 
-          <SearchBar
-            recent={recent}
-            onSelectRoute={handleSelectRoute}
-            onSelectStop={handleSelectStop}
-          />
+      {/* FLOATING LEFT PANEL (Desktop) / FLOATING BOTTOM SHEET (Mobile) */}
+      {drawerOpen && (
+        <aside
+          aria-label="Transit navigation and details"
+          className="fixed right-3 bottom-[84px] left-3 z-20 flex max-h-[58vh] flex-col overflow-hidden rounded-2xl border border-black/10 bg-white/95 shadow-2xl backdrop-blur-md md:top-[68px] md:right-auto md:bottom-4 md:left-3.5 md:max-h-none md:w-[360px] dark:border-white/10 dark:bg-neutral-950/95"
+        >
+          <FeedHealthBanner online={feedStatus.online} networkOnline={networkOnline} />
 
-          {/* Desktop 3-Tab Navigation */}
-          <nav aria-label="Primary" className="grid grid-cols-3 gap-1 rounded-xl bg-[#F5F6F8] p-1 dark:bg-neutral-900">
-            {navItems.map((n) => {
-              const active = tab === n.id && !selection;
-              return (
-                <button
-                  key={n.id}
-                  onClick={() => {
-                    setTab(n.id);
-                    closeSelection();
-                  }}
-                  aria-current={active ? 'page' : undefined}
-                  className={`flex min-h-[38px] items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-medium transition ${
-                    active
-                      ? 'bg-white text-[#176B52] shadow-xs dark:bg-neutral-800 dark:text-emerald-400'
-                      : 'text-[#737373] hover:text-[#171717] dark:hover:text-neutral-200'
-                  }`}
-                >
-                  {n.icon}
-                  <span>{n.label}</span>
-                </button>
-              );
-            })}
-          </nav>
-        </header>
-
-        <FeedHealthBanner online={feedStatus.online} networkOnline={networkOnline} />
-
-        {/* Sidebar Body */}
-        <div className="thin-scroll flex-1 overflow-y-auto">
           {selection ? (
             <DetailDrawer
               selection={selection}
@@ -419,137 +578,78 @@ export default function App() {
               onSelectVehicle={handleSelectVehicle}
             />
           ) : (
-            renderTabContent()
+            activeTab && (
+              <div className="flex h-full min-h-0 flex-col">
+                <div className="flex min-h-[46px] shrink-0 items-center justify-between border-b border-[#E5E7EB] px-4 py-2 dark:border-neutral-800">
+                  <h2 className="text-sm font-semibold text-[#171717] dark:text-neutral-100">
+                    {PANEL_TITLES[activeTab]}
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab(null)}
+                    aria-label="Close panel"
+                    title="Close panel"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-[#737373] transition hover:bg-[#F5F6F8] hover:text-[#171717] dark:hover:bg-neutral-900"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>
+                <div className="thin-scroll min-h-0 flex-1 overflow-y-auto">
+                  {renderPanelContent()}
+                </div>
+              </div>
+            )
           )}
-        </div>
-      </aside>
+        </aside>
+      )}
 
-      {/* MAIN MAP AREA */}
-      <main className="relative flex-1">
-        {/* Mobile Floating Brand + Search Bar */}
-        <div className="pointer-events-auto absolute top-3 right-3 left-3 z-20 md:hidden">
-          <SearchBar
-            recent={recent}
-            onSelectRoute={handleSelectRoute}
-            onSelectStop={handleSelectStop}
-          />
-          {(!networkOnline || !feedStatus.online) && (
-            <div className="mt-1.5 overflow-hidden rounded-xl border border-[#E5E7EB] shadow-sm dark:border-neutral-800">
-              <FeedHealthBanner online={feedStatus.online} networkOnline={networkOnline} />
-            </div>
-          )}
-        </div>
+      {/* BOTTOM-CENTER FLOATING 4-TAB NAVIGATION DOCK */}
+      <nav
+        aria-label="Primary"
+        className="pointer-events-auto fixed bottom-8 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-black/10 bg-white/95 p-1.5 shadow-lg backdrop-blur-md dark:border-white/10 dark:bg-neutral-900/95"
+      >
+        {dockItems.map((item) => {
+          const active = !selection && activeTab === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => handleDockClick(item.id)}
+              aria-current={active ? 'page' : undefined}
+              className={`flex min-h-[38px] items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium whitespace-nowrap transition sm:px-3.5 ${
+                active
+                  ? 'bg-[#eaf3f0] font-semibold text-[#176B52] dark:bg-emerald-500/15 dark:text-emerald-300'
+                  : 'text-[#525252] hover:bg-[#F5F6F8] hover:text-[#171717] dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-neutral-100'
+              }`}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
+      </nav>
 
-        <TransitMap
-          vehiclesMap={vehiclesMap}
-          stops={stops}
-          selectedRoute={routeDetail}
-          selection={selection}
-          userLocation={userLocation}
-          dark={dark}
-          feedStatus={feedStatus}
-          sseConnected={sseConnected}
-          onToggleTheme={() => setDark((d) => !d)}
-          onSelectVehicle={handleSelectVehicle}
-          onSelectStop={handleSelectStop}
-          onLocateMe={handleLocateMe}
-          onClearRoute={handleClearRoute}
-          flyToTarget={flyToTarget}
-        />
-
-        {/* MOBILE EXPANDABLE BOTTOM SHEET */}
-        <div
-          role="region"
-          aria-label="Transit details sheet"
-          className={`fixed right-0 bottom-14 left-0 z-20 flex flex-col rounded-t-2xl border-t border-[#E5E7EB] bg-white shadow-xl transition-all duration-200 md:hidden dark:border-neutral-800 dark:bg-neutral-950 ${
-            mobileSheetOpen ? 'h-[62vh]' : 'h-12'
-          }`}
-        >
-          <button
-            onClick={() => setMobileSheetOpen((o) => !o)}
-            aria-expanded={mobileSheetOpen}
-            className="flex h-12 shrink-0 items-center justify-between px-4 text-xs font-semibold text-[#171717] dark:text-neutral-100"
-          >
-            <span className="truncate">
-              {selection
-                ? selection.kind === 'vehicle'
-                  ? selectedVehicle?.routeShortName
-                    ? `Route ${selectedVehicle.routeShortName} · Live Bus`
-                    : 'Bus Details'
-                  : selection.kind === 'route'
-                    ? `Route ${routeDetail?.route.shortName || ''}`
-                    : stopDetail?.stop.name || 'Bus Stop'
-                : `${tab.charAt(0).toUpperCase() + tab.slice(1)} · ${
-                    feedStatus.online ? `${feedStatus.freshCount} live buses` : 'Offline'
-                  }`}
+      {/* SUBTLE BOTTOM DISCLAIMER / MOBILE LIVE COUNT PILL */}
+      <div className="pointer-events-none fixed bottom-1.5 left-1/2 z-10 flex -translate-x-1/2 items-center">
+        <div className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-black/8 bg-white/88 px-3 py-0.5 text-[10.5px] whitespace-nowrap text-[#737373] shadow-2xs backdrop-blur-sm dark:border-white/10 dark:bg-neutral-900/88 dark:text-neutral-400">
+          <span className="inline-flex items-center gap-1 sm:hidden">
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                feedStatus.online && sseConnected
+                  ? 'bg-[#15803d]'
+                  : feedStatus.online
+                    ? 'bg-[#b45309]'
+                    : 'bg-[#dc2626]'
+              }`}
+            />
+            <span className="font-mono-num font-semibold text-[#171717] dark:text-neutral-200">
+              {feedStatus.online ? `${feedStatus.freshCount} live` : 'Offline'}
             </span>
-            {mobileSheetOpen ? (
-              <ChevronDown className="h-4 w-4 text-[#737373]" aria-hidden="true" />
-            ) : (
-              <ChevronUp className="h-4 w-4 text-[#737373]" aria-hidden="true" />
-            )}
-          </button>
-
-          {mobileSheetOpen && (
-            <div className="thin-scroll flex-1 overflow-y-auto border-t border-[#E5E7EB] dark:border-neutral-800">
-              {selection ? (
-                <DetailDrawer
-                  selection={selection}
-                  canGoBack={history.length > 0}
-                  vehicle={selectedVehicle}
-                  vehicleStops={vehicleStops}
-                  vehicleOrigin={vehicleMeta.origin}
-                  vehicleDestination={vehicleMeta.destination}
-                  followVehicle={followVehicle}
-                  onToggleFollow={() => setFollowVehicle((f) => !f)}
-                  routeDetail={routeDetail}
-                  stopDetail={stopDetail}
-                  loading={detailLoading}
-                  error={detailError}
-                  isSaved={isSaved}
-                  onToggleSave={toggleSave}
-                  onBack={handleBack}
-                  onClose={closeSelection}
-                  onSelectRoute={handleSelectRoute}
-                  onSelectStop={handleSelectStop}
-                  onSelectVehicle={handleSelectVehicle}
-                />
-              ) : (
-                renderTabContent()
-              )}
-            </div>
-          )}
+            <span>·</span>
+          </span>
+          <span>APSRTC Vizag · Live bus locations &amp; timings may vary.</span>
         </div>
-
-        {/* MOBILE 3-ITEM BOTTOM NAVIGATION */}
-        <nav
-          aria-label="Primary"
-          className="pb-safe fixed right-0 bottom-0 left-0 z-30 grid h-14 grid-cols-3 border-t border-[#E5E7EB] bg-white md:hidden dark:border-neutral-800 dark:bg-neutral-950"
-        >
-          {navItems.map((n) => {
-            const active = tab === n.id;
-            return (
-              <button
-                key={n.id}
-                onClick={() => {
-                  setTab(n.id);
-                  closeSelection();
-                  setMobileSheetOpen(true);
-                }}
-                aria-current={active ? 'page' : undefined}
-                className={`flex min-h-[48px] flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition ${
-                  active
-                    ? 'text-[#176B52] dark:text-emerald-400'
-                    : 'text-[#737373] dark:text-neutral-400'
-                }`}
-              >
-                {n.icon}
-                <span>{n.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-      </main>
+      </div>
     </div>
   );
 }

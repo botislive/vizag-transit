@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { MapPin } from 'lucide-react';
+import { ChevronRight, MapPin, Search } from 'lucide-react';
 import type { StopItem } from '../types/transit';
 
 interface StopsPanelProps {
@@ -20,40 +20,55 @@ export function StopsPanel({ stops, onSelectStop }: StopsPanelProps) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="space-y-2 border-b border-slate-200/80 p-4 dark:border-slate-800">
-        <input
-          type="text"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filter Visakhapatnam bus stops…"
-          className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-100"
-        />
-        <div className="flex justify-between text-[11px] text-slate-400">
-          <span>Showing {filtered.length} of {stops.length} Vizag stops</span>
+      <div className="space-y-2.5 border-b border-[#E5E7EB] bg-white/80 p-4 dark:border-neutral-800 dark:bg-neutral-950/80">
+        <div className="flex min-h-[40px] items-center gap-2 rounded-xl border border-[#E5E7EB] bg-[#F5F6F8] px-3 py-1.5 focus-within:border-[#176B52] focus-within:bg-white dark:border-neutral-800 dark:bg-neutral-900 dark:focus-within:bg-neutral-900">
+          <Search className="h-4 w-4 shrink-0 text-[#737373]" aria-hidden="true" />
+          <input
+            type="text"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter Visakhapatnam bus stops…"
+            aria-label="Filter bus stops"
+            className="w-full bg-transparent text-sm text-[#171717] placeholder:text-[#737373] focus:outline-none dark:text-neutral-100"
+          />
+        </div>
+        <div className="flex justify-between text-[11px] text-[#737373]">
+          <span>
+            Showing <span className="font-mono-num font-medium">{filtered.length}</span> of{' '}
+            <span className="font-mono-num font-medium">{stops.length}</span> stops
+          </span>
         </div>
       </div>
 
-      <div className="thin-scroll flex-1 space-y-1 overflow-y-auto p-3">
+      <div className="thin-scroll flex-1 divide-y divide-[#E5E7EB] overflow-y-auto bg-white/60 dark:divide-neutral-800 dark:bg-neutral-950/60">
         {filtered.length === 0 && (
-          <div className="py-8 text-center text-xs text-slate-500">No stops match "{filter.trim()}".</div>
+          <div className="py-12 text-center text-xs text-[#737373]">
+            No stops match &ldquo;{filter.trim()}&rdquo;.
+          </div>
         )}
         {filtered.map((s) => (
           <button
             key={s.stopId}
             onClick={() => onSelectStop(s.stopId)}
-            className="flex w-full items-center justify-between gap-2 rounded-xl border border-slate-200/70 bg-white px-3 py-2.5 text-left transition hover:border-slate-300 hover:bg-slate-50/70 dark:border-slate-800 dark:bg-slate-900/60 dark:hover:border-slate-700"
+            className="group flex min-h-[54px] w-full items-center justify-between gap-2.5 px-4 py-2.5 text-left transition hover:bg-[#F5F6F8] dark:hover:bg-neutral-900"
           >
-            <div className="flex min-w-0 items-center gap-2.5">
-              <MapPin className="h-3.5 w-3.5 shrink-0 text-sky-600 dark:text-sky-400" />
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-indigo-500/30 bg-indigo-50 text-indigo-600 dark:border-indigo-400/30 dark:bg-indigo-950/60 dark:text-indigo-400">
+                <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+              </span>
               <div className="min-w-0">
-                <div className="truncate text-xs font-medium text-slate-900 dark:text-slate-100">
+                <div className="truncate text-sm font-medium text-[#171717] dark:text-neutral-100">
                   {s.name}
                 </div>
-                <div className="font-mono-num text-[10px] text-slate-400">
+                <div className="font-mono-num text-[11px] text-[#737373]">
                   {s.lat.toFixed(4)}, {s.lon.toFixed(4)}
                 </div>
               </div>
             </div>
+            <ChevronRight
+              className="h-4 w-4 shrink-0 text-[#737373] transition group-hover:translate-x-0.5"
+              aria-hidden="true"
+            />
           </button>
         ))}
       </div>

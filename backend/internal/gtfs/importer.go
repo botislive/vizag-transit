@@ -495,7 +495,7 @@ var VizagPublicRouteNumbers = map[string]string{
 	}
 	defer tx.Rollback()
 
-	tables := []string{"route_catalogue", "routes", "stops", "trips", "stop_times", "route_stops", "route_shapes"}
+	tables := []string{"route_catalogue", "routes", "stops", "trips", "stop_times", "route_stops", "route_shapes", "shapes"}
 	for _, tbl := range tables {
 		if _, err := tx.Exec("DELETE FROM " + tbl); err != nil {
 			return fmt.Errorf("clear %s: %w", tbl, err)
@@ -621,6 +621,32 @@ var VizagPublicRouteNumbers = map[string]string{
 		return err
 	}
 	defer stmtShape.Close()
+
+	stmtShapeByID, err := tx.Prepare(`INSERT OR REPLACE INTO shapes(shape_id, coords_json) VALUES (?, ?)`)
+	if err != nil {
+		return err
+	}
+	defer stmtShapeByID.Close()
+
+	// Insert all individual trip shapes used by Vizag trips
+	insertedShapes := make(map[string]bool)
+	for _, t := range vizagTrips {
+		if t.shapeID == "" || insertedShapes[t.shapeID] {
+			continue
+		}
+		if pts := shapePoints[t.shapeID]; len(pts) >= 2 {
+			sort.Slice(pts, func(i, j int) bool { return pts[i].seq < pts[j].seq })
+			coords := make([][2]float64, len(pts))
+			for i, p := range pts {
+				coords[i] = [2]float64{p.lon, p.lat}
+			}
+			b, _ := json.Marshal(coords)
+			if _, err := stmtShapeByID.Exec(t.shapeID, string(b)); err != nil {
+				return err
+			}
+			insertedShapes[t.shapeID] = true
+		}
+	}
 
 	for rid, ct := range canonicalTrip {
 		seqList := append([]rawStopTime(nil), tripStopTimesMap[ct.tripID]...)

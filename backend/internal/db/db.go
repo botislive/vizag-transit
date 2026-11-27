@@ -130,6 +130,11 @@ CREATE TABLE IF NOT EXISTS route_shapes (
 	coords_json TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS shapes (
+	shape_id TEXT PRIMARY KEY,
+	coords_json TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS vehicles (
 	vehicle_id TEXT PRIMARY KEY,
 	label TEXT NOT NULL DEFAULT '',

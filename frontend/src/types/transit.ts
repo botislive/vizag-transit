@@ -76,6 +76,7 @@ export interface VehicleStopProgress {
 export interface VehicleDetailResponse {
   vehicle: Vehicle;
   stops: VehicleStopProgress[];
+  shape?: [number, number][];
   origin?: string;
   destination?: string;
 }
@@ -234,7 +235,7 @@ export interface SavedItem {
   savedAt: number;
 }
 
-export type NavTab = 'explore' | 'routes' | 'saved';
+export type NavTab = 'routes' | 'stops' | 'buses' | 'plan' | 'saved';
 
 export type Selection =
   | { kind: 'vehicle'; id: string }
