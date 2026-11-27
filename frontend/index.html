@@ -7,7 +7,7 @@
     <title>VizagTransit — Live Vizag Bus Tracking &amp; APSRTC Visakhapatnam Bus Routes</title>
     <meta
       name="description"
-      content="VizagTransit is the live APSRTC bus tracking map for Visakhapatnam (Vizag). Track city buses in real time, check live GPS arrivals, stops, timings, and routes like 500Y, 400, 55, 38, and 6A."
+      content="VizagTransit is the free live APSRTC bus tracking app for Visakhapatnam (Vizag). Track city buses in real time on the map, check live GPS arrivals, stop timings, and routes like 500Y, 400, 55, 38, 28K, and 6A."
     />
     <meta
       name="keywords"
@@ -110,23 +110,55 @@
   </head>
   <body class="bg-white text-[#171717] antialiased selection:bg-[#176B52]/15 selection:text-[#176B52]">
     <div id="root">
-      <main style="max-width:720px;margin:40px auto;padding:20px;font-family:Inter,system-ui,sans-serif;line-height:1.6;">
-        <h1>VizagTransit — Live Vizag Bus Tracking &amp; APSRTC Visakhapatnam Bus Tracker</h1>
-        <p>
-          Track Visakhapatnam (Vizag) APSRTC city and regional buses in real time. Explore live bus GPS locations,
-          route polylines, stop arrivals, and direct bus connections between RTC Complex, Gajuwaka, NAD X Road,
-          Simhachalam, Maddilapalem, RK Beach, Anakapalli, Bheemunipatnam, and Tagarapuvalasa.
-        </p>
-        <h2>Popular Vizag Bus Routes</h2>
-        <ul>
-          <li><a href="/routes/j082-scindia-simhachalam">Route 55 — Scindia to Simhachalam (via Gajuwaka, Sheelanagar, NAD, Gopalapatnam)</a></li>
-          <li><a href="/routes/k151-rtc-complex-vsp-yelamanchili">Route 500Y — RTC Complex Visakhapatnam to Yelamanchili</a></li>
-          <li><a href="/routes/la24-anakapalli-rtc-complex-vsp">Route 500 — RTC Complex Visakhapatnam to Anakapalli</a></li>
-          <li><a href="/routes/co71-old-gajuwaka-rtc-complex-vsp">Route 400 — RTC Complex Visakhapatnam to Old Gajuwaka</a></li>
-          <li><a href="/routes/b011-rtc-complex-vsp-simhachalam">Route 6A — RTC Complex Visakhapatnam to Simhachalam</a></li>
-          <li><a href="/routes/g035-kottavalasa-r-k-beach">Route 28K — RK Beach to Kottavalasa</a></li>
-          <li><a href="/routes/do01-duvvada-rtc-complex-vsp">Route 38Y — RTC Complex Visakhapatnam to Duvvada</a></li>
-        </ul>
+      <main style="max-width:780px;margin:40px auto;padding:24px;font-family:Inter,system-ui,sans-serif;line-height:1.65;color:#171717;">
+        <header>
+          <h1>VizagTransit — Live Vizag Bus Tracking &amp; APSRTC Visakhapatnam Bus Tracker</h1>
+          <p>
+            <strong>VizagTransit</strong> (also searched as <strong>Vizag Transit</strong>) is a free, real-time public transport
+            tracker for Visakhapatnam, Andhra Pradesh. Monitor live APSRTC city and regional buses on an interactive street and
+            satellite map, view live GPS vehicle positions, check stop-by-stop progress timelines, and plan bus journeys across
+            276 routes and 521 bus stops.
+          </p>
+        </header>
+
+        <section>
+          <h2>Key Features for Visakhapatnam Commuters</h2>
+          <ul>
+            <li><strong>Real-Time GPS Bus Tracking:</strong> Watch hundreds of live APSRTC buses move across Vizag with vehicle registration numbers, speed, and live freshness status.</li>
+            <li><strong>Live Stop Progress &amp; ETAs:</strong> Tap any bus to inspect completed stops, your bus's exact position between stops, next stop arrival estimates, and upcoming stops.</li>
+            <li><strong>Point-to-Point Journey Planner:</strong> Find direct and scheduled buses between any two stops in Visakhapatnam, including outbound and return directions.</li>
+            <li><strong>Satellite &amp; Dark Map Modes:</strong> Switch seamlessly between clean vector street maps, light/dark themes, and satellite imagery.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>Popular Vizag APSRTC Bus Routes</h2>
+          <ul>
+            <li><a href="/routes/j082-scindia-simhachalam">Route 55 — Scindia to Simhachalam (via Malkapuram, New Gajuwaka, Old Gajuwaka, Sheelanagar, VSP Airport, NAD X Road, Gopalapatnam)</a></li>
+            <li><a href="/routes/k151-rtc-complex-vsp-yelamanchili">Route 500Y — RTC Complex Visakhapatnam to Yelamanchili (via Gurudwar, NAD, Gajuwaka, Kurmannapalem, Anakapalli)</a></li>
+            <li><a href="/routes/la24-anakapalli-rtc-complex-vsp">Route 500 — RTC Complex Visakhapatnam to Anakapalli</a></li>
+            <li><a href="/routes/co71-old-gajuwaka-rtc-complex-vsp">Route 400 — RTC Complex Visakhapatnam to Old Gajuwaka</a></li>
+            <li><a href="/routes/b011-rtc-complex-vsp-simhachalam">Route 6A — RTC Complex Visakhapatnam to Simhachalam (via Railway Station, Convent, Kancharapalem, NAD, Gopalapatnam)</a></li>
+            <li><a href="/routes/g035-kottavalasa-r-k-beach">Route 28K — RK Beach to Kottavalasa (via RTC Complex, Maddilapalem, NAD, Pendurthi)</a></li>
+            <li><a href="/routes/do01-duvvada-rtc-complex-vsp">Route 38Y — RTC Complex Visakhapatnam to Duvvada</a></li>
+            <li><a href="/routes/tv03-railway-station-vsp-tagarapu-valasa-citybus-stop">Route 222R — Railway Station Vsp to Tagarapuvalasa (via Maddilapalem, Madhurawada, Anandapuram)</a></li>
+            <li><a href="/routes/a033-bheemunipatnam-railway-station-vsp">Route 900K — Railway Station Vsp to Bheemunipatnam (Bheemili Beach Road)</a></li>
+            <li><a href="/routes/am10-old-gajuwaka-visakhapatnam-asr-international-airport">Route ASR-1 — Old Gajuwaka to Visakhapatnam International Airport</a></li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>Frequently Asked Questions</h2>
+          <h3>How can I track Vizag APSRTC city buses live?</h3>
+          <p>
+            Visit VizagTransit at <a href="https://vizagtransit.duckdns.org/">https://vizagtransit.duckdns.org/</a> to see live
+            APSRTC buses on the map, search by bus number (such as 55, 500Y, 400, 38, or 6A), or search between two bus stops.
+          </p>
+          <h3>Is VizagTransit free to use?</h3>
+          <p>
+            Yes. VizagTransit is completely free for all Visakhapatnam commuters with zero login requirements and 24/7 live updates.
+          </p>
+        </section>
       </main>
     </div>
     <script type="module" src="/src/main.tsx"></script>

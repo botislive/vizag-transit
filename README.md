@@ -1,4 +1,6 @@
-# Vizag Transit — Live APSRTC Bus Tracker
+# VizagTransit — Live APSRTC Bus Tracker
+
+**Live App**: **[https://vizagtransit.duckdns.org](https://vizagtransit.duckdns.org)**
 
 A local-first, real-time public transport tracker for **Visakhapatnam, Andhra Pradesh, India**, built with **Go + SQLite + SSE** on the backend and **React + TypeScript + Tailwind CSS + MapLibre GL JS** on the frontend.
 
