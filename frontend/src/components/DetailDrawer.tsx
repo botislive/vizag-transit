@@ -36,8 +36,8 @@ interface DetailDrawerProps {
   selection: Selection;
   lang?: Language;
   canGoBack?: boolean;
-  sheetExpanded?: boolean;
-  onToggleSheetExpand?: () => void;
+  sheetState?: 'peek' | 'half' | 'full';
+  onSetSheetState?: (state: 'peek' | 'half' | 'full') => void;
   vehicle: Vehicle | null;
   vehicleStops?: VehicleStopProgress[];
   vehicleOrigin?: string;
@@ -72,8 +72,8 @@ export function DetailDrawer({
   selection,
   lang = 'en',
   canGoBack = false,
-  sheetExpanded = false,
-  onToggleSheetExpand,
+  sheetState = 'half',
+  onSetSheetState,
   vehicle,
   vehicleStops = [],
   vehicleOrigin,
@@ -142,17 +142,32 @@ export function DetailDrawer({
         : `Stop ${stopDetail?.stop.name || selection.id}`;
 
   return (
-    <div className="flex h-full flex-col bg-white dark:bg-neutral-950">
-      {/* Header Bar with Back, Share, Report, Mobile Expand, Close */}
-      <div className="flex min-h-[48px] items-center justify-between border-b border-[#E5E7EB] px-2.5 py-2 dark:border-neutral-800">
-        <button
-          onClick={onBack}
-          className="flex min-h-[40px] items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-[#171717] transition hover:bg-[#F5F6F8] dark:text-neutral-200 dark:hover:bg-neutral-900"
-        >
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          <span>{canGoBack ? t.back : t.all}</span>
-        </button>
-        <div className="flex items-center gap-1">
+    <div className="flex min-h-0 flex-1 flex-col bg-white dark:bg-neutral-950">
+      {/* Header Bar with Back, Share, Report, Minimize/Expand, Close */}
+      <div className="flex min-h-[46px] shrink-0 items-center justify-between border-b border-[#E5E7EB] px-2.5 py-1.5 dark:border-neutral-800">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <button
+            onClick={onBack}
+            className="flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-[#171717] transition hover:bg-[#F5F6F8] dark:text-neutral-200 dark:hover:bg-neutral-900"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            <span>{canGoBack ? t.back : t.all}</span>
+          </button>
+          {sheetState === 'peek' && (
+            <button
+              type="button"
+              onClick={() => onSetSheetState?.('half')}
+              className="truncate text-xs font-semibold text-[#176B52] md:hidden dark:text-emerald-400"
+            >
+              {selection.kind === 'vehicle'
+                ? `Route ${vehicle?.routeShortName || ''}`
+                : selection.kind === 'route'
+                  ? `Route ${routeDetail?.route.shortName || ''}`
+                  : stopDetail?.stop.name || ''}
+            </button>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-0.5">
           <button
             type="button"
             onClick={handleShare}
@@ -176,20 +191,31 @@ export function DetailDrawer({
           >
             <AlertTriangle className="h-4 w-4" aria-hidden="true" />
           </button>
-          {onToggleSheetExpand && (
-            <button
-              type="button"
-              onClick={onToggleSheetExpand}
-              aria-label={sheetExpanded ? t.collapseSheet : t.expandSheet}
-              title={sheetExpanded ? t.collapseSheet : t.expandSheet}
-              className="flex h-10 w-10 items-center justify-center rounded-lg text-[#737373] transition hover:bg-[#F5F6F8] hover:text-[#171717] md:hidden dark:hover:bg-neutral-900"
-            >
-              {sheetExpanded ? (
+          {onSetSheetState && (
+            <>
+              <button
+                type="button"
+                onClick={() =>
+                  onSetSheetState(sheetState === 'peek' ? 'half' : 'peek')
+                }
+                aria-label={sheetState === 'peek' ? 'Restore sheet' : 'Minimize sheet to map'}
+                title={sheetState === 'peek' ? 'Restore sheet' : 'Minimize to map'}
+                className="flex h-10 w-10 items-center justify-center rounded-lg text-[#737373] transition hover:bg-[#F5F6F8] hover:text-[#171717] md:hidden dark:hover:bg-neutral-900"
+              >
                 <Minimize2 className="h-4 w-4" aria-hidden="true" />
-              ) : (
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onSetSheetState(sheetState === 'full' ? 'half' : 'full')
+                }
+                aria-label={sheetState === 'full' ? t.collapseSheet : t.expandSheet}
+                title={sheetState === 'full' ? t.collapseSheet : t.expandSheet}
+                className="flex h-10 w-10 items-center justify-center rounded-lg text-[#737373] transition hover:bg-[#F5F6F8] hover:text-[#171717] md:hidden dark:hover:bg-neutral-900"
+              >
                 <Maximize2 className="h-4 w-4" aria-hidden="true" />
-              )}
-            </button>
+              </button>
+            </>
           )}
           <button
             onClick={onClose}
@@ -212,7 +238,7 @@ export function DetailDrawer({
         />
       )}
 
-      <div className="thin-scroll flex-1 overflow-y-auto p-4">
+      <div className="thin-scroll min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain p-4">
         {loading && (
           <div className="py-12 text-center text-xs text-[#737373]">Loading details…</div>
         )}

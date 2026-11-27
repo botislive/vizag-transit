@@ -130,7 +130,8 @@ export default function App() {
 
   // Map-first on initial load
   const [activeTab, setActiveTab] = useState<NavTab | null>(null);
-  const [sheetExpanded, setSheetExpanded] = useState(false);
+  const [sheetState, setSheetState] = useState<'peek' | 'half' | 'full'>('half');
+  const dragStartYRef = useRef<number | null>(null);
   const [initialJourney, setInitialJourney] = useState<{ from: string; fromName?: string; to: string } | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const searchWrapRef = useRef<HTMLDivElement>(null);
@@ -512,9 +513,11 @@ export default function App() {
   const handleDockClick = (id: 'explore' | 'routes' | 'saved') => {
     if (selection) {
       closeSelection();
+      setSheetState('half');
       setActiveTab(id);
       return;
     }
+    setSheetState('half');
     setActiveTab((prev) => (prev === id ? null : id));
   };
 
@@ -749,14 +752,52 @@ export default function App() {
         </div>
       )}
 
-      {/* EXPANDABLE MOBILE BOTTOM SHEET / DESKTOP LEFT RAIL */}
+      {/* DRAGGABLE & MINIMIZABLE MOBILE BOTTOM SHEET / DESKTOP LEFT RAIL */}
       {drawerOpen && (
         <aside
           aria-label="Transit navigation and details"
-          className={`fixed right-2.5 bottom-[78px] left-2.5 z-20 flex flex-col overflow-hidden rounded-2xl border border-black/10 bg-white/95 shadow-2xl backdrop-blur-md transition-[max-height] duration-200 sm:bottom-[94px] md:top-[68px] md:right-auto md:bottom-4 md:left-3.5 md:max-h-none md:w-[370px] dark:border-white/10 dark:bg-neutral-950/95 ${
-            sheetExpanded ? 'max-h-[80vh]' : 'max-h-[56vh]'
+          className={`fixed right-2.5 bottom-[78px] left-2.5 z-20 flex flex-col overflow-hidden rounded-2xl border border-black/10 bg-white/95 shadow-2xl backdrop-blur-md transition-[height,max-height] duration-200 sm:bottom-[94px] md:top-[68px] md:right-auto md:bottom-4 md:left-3.5 md:h-auto md:max-h-none md:w-[370px] dark:border-white/10 dark:bg-neutral-950/95 ${
+            sheetState === 'peek'
+              ? 'h-[72px]'
+              : sheetState === 'full'
+                ? 'h-[80dvh] max-h-[calc(100dvh-146px)]'
+                : 'h-[48dvh] max-h-[calc(100dvh-146px)]'
           }`}
         >
+          {/* Mobile Drag Handle (touch drag up/down or tap to minimize/restore) */}
+          <div
+            role="button"
+            tabIndex={0}
+            aria-label={sheetState === 'peek' ? 'Expand sheet' : 'Drag or tap to resize sheet'}
+            onTouchStart={(e) => {
+              dragStartYRef.current = e.touches[0]?.clientY ?? null;
+            }}
+            onTouchEnd={(e) => {
+              const startY = dragStartYRef.current;
+              const endY = e.changedTouches[0]?.clientY ?? null;
+              dragStartYRef.current = null;
+              if (startY === null || endY === null) return;
+              const dy = endY - startY;
+              if (dy > 36) {
+                setSheetState((s) => (s === 'full' ? 'half' : 'peek'));
+              } else if (dy < -36) {
+                setSheetState((s) => (s === 'peek' ? 'half' : 'full'));
+              }
+            }}
+            onClick={() =>
+              setSheetState((s) => (s === 'peek' ? 'half' : 'peek'))
+            }
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setSheetState((s) => (s === 'peek' ? 'half' : 'peek'));
+              }
+            }}
+            className="flex h-6 shrink-0 cursor-grab touch-none items-center justify-center bg-white/80 active:cursor-grabbing md:hidden dark:bg-neutral-950/80"
+          >
+            <span className="h-1 w-10 rounded-full bg-neutral-300 dark:bg-neutral-700" />
+          </div>
+
           <FeedHealthBanner online={feedStatus.online} networkOnline={networkOnline} />
 
           {selection ? (
@@ -764,8 +805,8 @@ export default function App() {
               selection={selection}
               lang={lang}
               canGoBack={history.length > 0}
-              sheetExpanded={sheetExpanded}
-              onToggleSheetExpand={() => setSheetExpanded((e) => !e)}
+              sheetState={sheetState}
+              onSetSheetState={setSheetState}
               vehicle={selectedVehicle}
               vehicleStops={vehicleStops}
               vehicleOrigin={vehicleMeta.origin}
@@ -791,24 +832,33 @@ export default function App() {
             />
           ) : (
             activeTab && (
-              <div className="flex h-full min-h-0 flex-col">
-                <div className="flex min-h-[48px] shrink-0 items-center justify-between border-b border-[#E5E7EB] px-3.5 py-2 dark:border-neutral-800">
+              <div className="flex min-h-0 flex-1 flex-col">
+                <div className="flex min-h-[46px] shrink-0 items-center justify-between border-b border-[#E5E7EB] px-3.5 py-1.5 dark:border-neutral-800">
                   <h2 className="text-sm font-semibold text-[#171717] dark:text-neutral-100">
                     {panelTitles[activeTab]}
                   </h2>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-0.5">
                     <button
                       type="button"
-                      onClick={() => setSheetExpanded((e) => !e)}
-                      aria-label={sheetExpanded ? t.collapseSheet : t.expandSheet}
-                      title={sheetExpanded ? t.collapseSheet : t.expandSheet}
+                      onClick={() =>
+                        setSheetState((s) => (s === 'peek' ? 'half' : 'peek'))
+                      }
+                      aria-label={sheetState === 'peek' ? 'Restore sheet' : 'Minimize sheet to map'}
+                      title={sheetState === 'peek' ? 'Restore sheet' : 'Minimize to map'}
                       className="flex h-10 w-10 items-center justify-center rounded-xl text-[#737373] transition hover:bg-[#F5F6F8] hover:text-[#171717] md:hidden dark:hover:bg-neutral-900"
                     >
-                      {sheetExpanded ? (
-                        <Minimize2 className="h-4 w-4" aria-hidden="true" />
-                      ) : (
-                        <Maximize2 className="h-4 w-4" aria-hidden="true" />
-                      )}
+                      <Minimize2 className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSheetState((s) => (s === 'full' ? 'half' : 'full'))
+                      }
+                      aria-label={sheetState === 'full' ? t.collapseSheet : t.expandSheet}
+                      title={sheetState === 'full' ? t.collapseSheet : t.expandSheet}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl text-[#737373] transition hover:bg-[#F5F6F8] hover:text-[#171717] md:hidden dark:hover:bg-neutral-900"
+                    >
+                      <Maximize2 className="h-4 w-4" aria-hidden="true" />
                     </button>
                     <button
                       type="button"
@@ -821,7 +871,7 @@ export default function App() {
                     </button>
                   </div>
                 </div>
-                <div className="thin-scroll min-h-0 flex-1 overflow-y-auto">
+                <div className="thin-scroll min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain">
                   {renderPanelContent()}
                 </div>
               </div>
