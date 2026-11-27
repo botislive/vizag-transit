@@ -1,0 +1,16 @@
+# Binaries & build artifacts
+bin/
+*.exe
+*.test
+*.out
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Local databases & logs
+backend/data/*.db-shm
+backend/data/*.db-wal
+*.log
+.env
+.DS_Store

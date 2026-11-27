@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: vizag-transit
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: singapore
+    branch: main
+    autoDeploy: true
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: DATA_DIR
+        value: /app/data
+      - key: RT_POLL_SECONDS
+        value: 12
+      - key: STALE_THRESHOLD_SECONDS
+        value: 300
+      - key: MAX_VEHICLE_AGE_SECONDS
+        value: 3600

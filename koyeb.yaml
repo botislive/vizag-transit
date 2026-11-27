@@ -1,0 +1,37 @@
+# Koyeb App / Service Specification for Vizag Transit
+# Zero-cost Nano tier deployment (Always-on 24/7 without idle sleep)
+name: vizag-transit
+services:
+  - name: vizag-transit-web
+    type: web
+    instance_type: nano
+    regions:
+      - sin # Singapore region (closest to Vizag / India)
+    docker:
+      dockerfile: Dockerfile
+    ports:
+      - port: 8080
+        path: /
+    routes:
+      - path: /
+        port: 8080
+    env:
+      - key: PORT
+        value: "8080"
+      - key: DATA_DIR
+        value: "/app/data"
+      - key: RT_POLL_SECONDS
+        value: "12"
+      - key: STALE_THRESHOLD_SECONDS
+        value: "300"
+      - key: MAX_VEHICLE_AGE_SECONDS
+        value: "3600"
+    health_checks:
+      - http:
+          path: /api/health
+          port: 8080
+        interval: 30
+        timeout: 5
+    scalings:
+      - min: 1
+        max: 1

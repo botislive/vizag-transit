@@ -1,0 +1,40 @@
+# fly.toml app configuration file for vizag-transit
+# Zero-cost configuration for Fly.io Free Tier
+
+app = "vizag-transit"
+primary_region = "sin" # Singapore (closest region to Vizag / India)
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  DATA_DIR = "/app/data"
+  RT_POLL_SECONDS = "12"
+  STALE_THRESHOLD_SECONDS = "300"
+  MAX_VEHICLE_AGE_SECONDS = "3600"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 250
+    soft_limit = 200
+
+[[http_service.checks]]
+  grace_period = "10s"
+  interval = "30s"
+  method = "GET"
+  timeout = "5s"
+  path = "/api/health"
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1
