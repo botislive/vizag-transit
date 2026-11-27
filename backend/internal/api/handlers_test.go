@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"vizag-transit/internal/config"
@@ -99,5 +100,29 @@ func TestAPIWithEmptyDBAndEndpoints(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/assets/missing.js", nil))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("GET /assets/missing.js status = %d, expected 404", rec.Code)
+	}
+
+	// Test GET /robots.txt
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/robots.txt", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Sitemap: https://vizagtransit.duckdns.org/sitemap.xml") {
+		t.Fatalf("GET /robots.txt unexpected response: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	// Test GET /sitemap.xml
+	_, _ = conn.Exec(`INSERT INTO route_catalogue(route_number, primary_route_id, primary_long_name, classification, confidence, classification_reason, variant_count, total_trips, total_stops) VALUES ('28K', 'r1', 'R.K.Beach – Kothavalasa', 'City', 'high', 'test', 1, 10, 2)`)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/sitemap.xml", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "https://vizagtransit.duckdns.org/routes/r1") {
+		t.Fatalf("GET /sitemap.xml unexpected response: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	// Test .onrender.com host receives X-Robots-Tag: noindex, nofollow
+	rec = httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.Host = "vizag-transit.onrender.com"
+	h.ServeHTTP(rec, req)
+	if rec.Header().Get("X-Robots-Tag") != "noindex, nofollow" {
+		t.Fatalf("expected X-Robots-Tag: noindex, nofollow for .onrender.com, got %q", rec.Header().Get("X-Robots-Tag"))
 	}
 }

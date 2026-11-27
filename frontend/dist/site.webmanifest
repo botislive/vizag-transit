@@ -1,0 +1,17 @@
+{
+  "name": "VizagTransit — Live APSRTC Bus Tracker",
+  "short_name": "VizagTransit",
+  "description": "Live APSRTC bus tracking, route maps, stop ETAs, and journey planning for Visakhapatnam (Vizag).",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#176B52",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

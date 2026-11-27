@@ -40,6 +40,10 @@ func NewServer(conn *sql.DB, poller *rt.Poller) http.Handler {
 	mux.HandleFunc("GET /api/journey", s.handleJourney)
 	mux.HandleFunc("GET /api/live", s.handleLiveSSE)
 
+	// SEO discovery endpoints
+	mux.HandleFunc("GET /robots.txt", s.handleRobotsTxt)
+	mux.HandleFunc("GET /sitemap.xml", s.handleSitemapXML)
+
 	// Explicit 404 for unmatched /api/ endpoints to avoid falling through to the SPA
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
@@ -56,6 +60,10 @@ func withCORS(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		// Consolidate search engine indexing exclusively on vizagtransit.duckdns.org
+		if strings.Contains(strings.ToLower(r.Host), "onrender.com") && !strings.HasPrefix(r.URL.Path, "/api/") {
+			w.Header().Set("X-Robots-Tag", "noindex, nofollow")
+		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return
@@ -72,6 +80,51 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+func (s *Server) handleRobotsTxt(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	_, _ = w.Write([]byte("User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: https://vizagtransit.duckdns.org/sitemap.xml\n"))
+}
+
+func (s *Server) handleSitemapXML(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+
+	var b strings.Builder
+	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
+	b.WriteString(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n")
+	b.WriteString("  <url><loc>https://vizagtransit.duckdns.org/</loc><changefreq>hourly</changefreq><priority>1.0</priority></url>\n")
+
+	rows, err := s.db.QueryContext(r.Context(), `SELECT primary_route_id FROM route_catalogue ORDER BY total_trips DESC`)
+	if err == nil {
+		for rows.Next() {
+			var rid string
+			if err := rows.Scan(&rid); err == nil && rid != "" {
+				b.WriteString(fmt.Sprintf("  <url><loc>https://vizagtransit.duckdns.org/routes/%s</loc><changefreq>daily</changefreq><priority>0.8</priority></url>\n", rid))
+			}
+		}
+		rows.Close()
+	}
+
+	srows, err := s.db.QueryContext(r.Context(), `
+		SELECT rs.stop_id FROM route_stops rs
+		GROUP BY rs.stop_id
+		ORDER BY COUNT(*) DESC
+		LIMIT 150`)
+	if err == nil {
+		for srows.Next() {
+			var sid string
+			if err := srows.Scan(&sid); err == nil && sid != "" {
+				b.WriteString(fmt.Sprintf("  <url><loc>https://vizagtransit.duckdns.org/stops/%s</loc><changefreq>daily</changefreq><priority>0.6</priority></url>\n", sid))
+			}
+		}
+		srows.Close()
+	}
+
+	b.WriteString("</urlset>\n")
+	_, _ = w.Write([]byte(b.String()))
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {

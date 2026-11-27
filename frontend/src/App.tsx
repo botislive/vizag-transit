@@ -257,6 +257,10 @@ export default function App() {
       try {
         const detail = await api.getRoute(id);
         setRouteDetail(detail);
+        document.title = `Route ${detail.route.shortName} (${detail.route.longName}) — VizagTransit`;
+        if (window.location.pathname !== `/routes/${id}`) {
+          window.history.replaceState(null, '', `/routes/${id}`);
+        }
         recordRecent({
           kind: 'route',
           id: detail.route.routeId,
@@ -282,6 +286,10 @@ export default function App() {
       try {
         const detail = await api.getStop(id);
         setStopDetail(detail);
+        document.title = `${detail.stop.name} Bus Stop — VizagTransit`;
+        if (window.location.pathname !== `/stops/${id}`) {
+          window.history.replaceState(null, '', `/stops/${id}`);
+        }
         setFlyToTarget({ lat: detail.stop.lat, lon: detail.stop.lon, zoom: 15.2, ts: Date.now() });
         recordRecent({
           kind: 'stop',
@@ -298,6 +306,20 @@ export default function App() {
     [recordRecent, selection, pushSelection],
   );
 
+  // Sync deep link paths (/routes/:id, /stops/:id) on initial page load
+  useEffect(() => {
+    const p = window.location.pathname;
+    if (p.startsWith('/routes/')) {
+      const rid = decodeURIComponent(p.slice('/routes/'.length).replace(/\/+$/, ''));
+      if (rid) void handleSelectRoute(rid);
+    } else if (p.startsWith('/stops/')) {
+      const sid = decodeURIComponent(p.slice('/stops/'.length).replace(/\/+$/, ''));
+      if (sid) void handleSelectStop(sid);
+    }
+    // Run once on initial mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const closeSelection = useCallback(() => {
     setSelection(null);
     setHistory([]);
@@ -307,6 +329,10 @@ export default function App() {
     setVehicleMeta({});
     setFollowVehicle(false);
     setDetailError(null);
+    document.title = 'VizagTransit — Live Vizag Bus Tracking & APSRTC Visakhapatnam Bus Routes';
+    if (window.location.pathname !== '/') {
+      window.history.replaceState(null, '', '/');
+    }
   }, []);
 
   const closeAll = useCallback(() => {
