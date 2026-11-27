@@ -860,12 +860,12 @@ export function TransitMap({
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
 
-      {/* TOP-CENTER LIVE STATUS PILL (offset cleanly clear of header at 768px md:) */}
-      <div className="pointer-events-none fixed top-3.5 left-1/2 z-10 flex -translate-x-1/2 flex-col items-center gap-2 md:left-[398px] md:translate-x-0 lg:left-1/2 lg:-translate-x-1/2">
+      {/* TOP-CENTER LIVE STATUS + ACTIVE ROUTE PILL (cleanly separated below mobile header) */}
+      <div className="pointer-events-none fixed top-[68px] left-2.5 z-10 flex max-w-[calc(100vw-68px)] flex-col items-start gap-2 md:top-3.5 md:left-[398px] md:max-w-none md:items-center lg:left-1/2 lg:-translate-x-1/2">
         <div
           role="status"
           title={feedStatus.feedTimestamp > 0 ? `Updated ${formatRelativeAge(feedAge)}` : undefined}
-          className="pointer-events-auto hidden items-center gap-2 rounded-full border border-black/10 bg-white/95 px-3.5 py-1.5 text-xs font-medium shadow-sm backdrop-blur-md sm:flex dark:border-white/10 dark:bg-neutral-900/95"
+          className="pointer-events-auto hidden items-center gap-2 rounded-full border border-black/10 bg-white/95 px-3.5 py-1.5 text-xs font-medium shadow-sm backdrop-blur-md md:flex dark:border-white/10 dark:bg-neutral-900/95"
         >
           <span
             aria-hidden="true"
@@ -891,11 +891,11 @@ export function TransitMap({
 
         {/* Floating Active Route Pill */}
         {selectedRoute && (
-          <div className="pointer-events-auto flex max-w-[90vw] items-center gap-2 rounded-full border border-black/10 bg-white/95 px-3 py-1.5 shadow-md backdrop-blur-md dark:border-white/10 dark:bg-neutral-900/95">
-            <span className="font-mono-num rounded-md bg-[#176B52] px-2 py-0.5 text-xs font-bold text-white">
+          <div className="pointer-events-auto flex max-w-full items-center gap-2 rounded-2xl border border-black/10 bg-white/95 px-2.5 py-1.5 shadow-md backdrop-blur-md md:rounded-full md:px-3 dark:border-white/10 dark:bg-neutral-900/95">
+            <span className="font-mono-num shrink-0 rounded-md bg-[#176B52] px-2 py-0.5 text-xs font-bold text-white">
               {selectedRoute.route.shortName}
             </span>
-            <span className="max-w-[calc(100vw-130px)] text-xs leading-tight font-medium text-[#171717] sm:max-w-[380px] dark:text-neutral-100">
+            <span className="text-xs leading-tight font-medium text-[#171717] sm:max-w-[360px] dark:text-neutral-100">
               {selectedRoute.route.longName}
             </span>
             {onClearRoute && (
@@ -903,7 +903,7 @@ export function TransitMap({
                 onClick={onClearRoute}
                 aria-label="Clear highlighted route"
                 title="Clear highlighted route"
-                className="flex h-6 w-6 items-center justify-center rounded-full text-[#737373] transition hover:bg-[#F5F6F8] hover:text-[#171717] dark:hover:bg-neutral-800"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[#737373] transition hover:bg-[#F5F6F8] hover:text-[#171717] dark:hover:bg-neutral-800"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -912,18 +912,17 @@ export function TransitMap({
         )}
       </div>
 
-      {/* TOP-RIGHT FLOATING MAP CONTROLS + LEGEND (positioned below mobile header, top-right on desktop) */}
+      {/* COMPACT SINGLE UPRIGHT ICON-ONLY MAP CONTROLS PILL */}
       <div
         ref={legendWrapRef}
-        className="pointer-events-none fixed top-[68px] right-2.5 z-10 flex flex-col items-end gap-1.5 md:top-3.5 md:right-3.5 md:z-20 md:gap-2"
+        className="pointer-events-none fixed top-[68px] right-2.5 z-10 flex flex-col items-end gap-2 md:top-3.5 md:right-3.5 md:z-20"
       >
-        {/* Zoom Group */}
-        <div className="pointer-events-auto flex flex-col overflow-hidden rounded-2xl border border-black/10 bg-white/95 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-neutral-900/95">
+        <div className="pointer-events-auto flex w-10 flex-col divide-y divide-black/8 overflow-hidden rounded-2xl border border-black/10 bg-white/95 shadow-sm backdrop-blur-md dark:divide-white/10 dark:border-white/10 dark:bg-neutral-900/95">
           <button
             onClick={() => mapRef.current?.zoomIn({ duration: 250 })}
             aria-label="Zoom in"
             title="Zoom in"
-            className="flex h-10 w-10 items-center justify-center border-b border-black/8 text-[#171717] transition hover:bg-[#F5F6F8] dark:border-white/10 dark:text-neutral-100 dark:hover:bg-neutral-800"
+            className="flex h-10 w-10 items-center justify-center text-[#171717] transition hover:bg-[#F5F6F8] dark:text-neutral-100 dark:hover:bg-neutral-800"
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
           </button>
@@ -935,10 +934,6 @@ export function TransitMap({
           >
             <Minus className="h-4 w-4" aria-hidden="true" />
           </button>
-        </div>
-
-        {/* Standalone Satellite & Dark Mode Pills */}
-        <div className="pointer-events-auto flex flex-col items-end gap-1.5">
           <button
             onClick={() => {
               if (!lowDataMode) setSatellite((s) => !s);
@@ -949,72 +944,67 @@ export function TransitMap({
               lowDataMode ? 'Satellite disabled in Low-Data mode' : 'Toggle satellite map view'
             }
             title={lowDataMode ? 'Disabled in Low-Data mode' : 'Toggle satellite view'}
-            className={`flex h-9 items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium shadow-sm backdrop-blur-md transition disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`flex h-10 w-10 items-center justify-center transition disabled:cursor-not-allowed disabled:opacity-40 ${
               satellite && !lowDataMode
-                ? 'border-[#176B52] bg-[#176B52] text-white'
-                : 'border-black/10 bg-white/95 text-[#171717] hover:bg-[#F5F6F8] dark:border-white/10 dark:bg-neutral-900/95 dark:text-neutral-100 dark:hover:bg-neutral-800'
+                ? 'bg-[#176B52] text-white'
+                : 'text-[#171717] hover:bg-[#F5F6F8] dark:text-neutral-100 dark:hover:bg-neutral-800'
             }`}
           >
-            <Layers className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>Satellite</span>
+            <Layers className="h-4 w-4" aria-hidden="true" />
           </button>
           <button
             onClick={onToggleTheme}
             aria-pressed={dark}
             aria-label={dark ? 'Switch to light mode' : 'Switch to dark mode'}
             title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-            className={`flex h-9 items-center gap-1.5 rounded-full border px-3 text-[11px] font-medium shadow-sm backdrop-blur-md transition ${
+            className={`flex h-10 w-10 items-center justify-center transition ${
               dark
-                ? 'border-[#176B52] bg-neutral-900/95 text-emerald-400 hover:bg-neutral-800'
-                : 'border-black/10 bg-white/95 text-[#171717] hover:bg-[#F5F6F8]'
+                ? 'text-emerald-400 hover:bg-neutral-800'
+                : 'text-[#171717] hover:bg-[#F5F6F8]'
             }`}
           >
-            {dark ? <Sun className="h-3.5 w-3.5" aria-hidden="true" /> : <Moon className="h-3.5 w-3.5" aria-hidden="true" />}
-            <span>{dark ? 'Light' : 'Dark'}</span>
+            {dark ? <Sun className="h-4 w-4" aria-hidden="true" /> : <Moon className="h-4 w-4" aria-hidden="true" />}
           </button>
-          {lowDataMode && (
-            <div className="flex items-center gap-1 rounded-full border border-[#176B52]/30 bg-[#eaf3f0] px-2.5 py-1 text-[10px] font-semibold text-[#176B52]">
-              <Wifi className="h-3 w-3" aria-hidden="true" />
-              <span>Low-Data</span>
-            </div>
-          )}
-        </div>
-
-        {/* Recenter / Locate / Legend Stack */}
-        <div className="pointer-events-auto flex flex-col items-center overflow-hidden rounded-2xl border border-black/10 bg-white/95 shadow-sm backdrop-blur-md dark:border-white/10 dark:bg-neutral-900/95">
           <button
             onClick={() =>
               mapRef.current?.flyTo({ center: VIZAG_CENTER, zoom: 11.8, duration: 500 })
             }
             aria-label="Reset view to Visakhapatnam"
             title="Reset map view"
-            className="flex h-9 w-full items-center justify-center border-b border-black/8 text-[#171717] transition hover:bg-[#F5F6F8] dark:border-white/10 dark:text-neutral-100 dark:hover:bg-neutral-800"
+            className="flex h-10 w-10 items-center justify-center text-[#171717] transition hover:bg-[#F5F6F8] dark:text-neutral-100 dark:hover:bg-neutral-800"
           >
-            <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+            <RotateCcw className="h-4 w-4" aria-hidden="true" />
           </button>
           <button
             onClick={onLocateMe}
             aria-label="Find my current location"
             title="Find my location"
-            className="flex h-9 w-full items-center justify-center border-b border-black/8 text-[#171717] transition hover:bg-[#F5F6F8] dark:border-white/10 dark:text-neutral-100 dark:hover:bg-neutral-800"
+            className="flex h-10 w-10 items-center justify-center text-[#176B52] transition hover:bg-[#F5F6F8] dark:text-emerald-400 dark:hover:bg-neutral-800"
           >
-            <LocateFixed className="h-4 w-4 text-[#176B52] dark:text-emerald-400" aria-hidden="true" />
+            <LocateFixed className="h-4 w-4" aria-hidden="true" />
           </button>
           <button
             onClick={() => setLegendOpen((o) => !o)}
             aria-expanded={legendOpen}
             aria-label="Toggle map legend"
             title="Map legend"
-            className={`flex h-9 items-center justify-center gap-1 px-2.5 text-[11px] font-medium transition ${
+            className={`flex h-10 w-10 items-center justify-center transition ${
               legendOpen
                 ? 'bg-[#176B52] text-white'
                 : 'text-[#171717] hover:bg-[#F5F6F8] dark:text-neutral-100 dark:hover:bg-neutral-800'
             }`}
           >
-            <Info className="h-3.5 w-3.5 sm:hidden" aria-hidden="true" />
-            <span>Legend</span>
+            <Info className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
+        {lowDataMode && (
+          <div
+            title="Low-Data mode active"
+            className="pointer-events-auto flex h-7 w-10 items-center justify-center rounded-xl border border-[#176B52]/30 bg-[#eaf3f0] text-[#176B52] shadow-xs"
+          >
+            <Wifi className="h-3.5 w-3.5" aria-hidden="true" />
+          </div>
+        )}
 
         {/* Legend Popover */}
         {legendOpen && (

@@ -173,7 +173,9 @@ export function DetailDrawer({
             onClick={handleShare}
             aria-label={t.share}
             title={t.share}
-            className="flex h-10 items-center gap-1 rounded-lg px-2 text-xs font-medium text-[#737373] transition hover:bg-[#F5F6F8] hover:text-[#171717] dark:hover:bg-neutral-900 dark:hover:text-neutral-200"
+            className={`h-10 items-center gap-1 rounded-lg px-2 text-xs font-medium text-[#737373] transition hover:bg-[#F5F6F8] hover:text-[#171717] dark:hover:bg-neutral-900 dark:hover:text-neutral-200 ${
+              sheetState === 'peek' ? 'hidden md:flex' : 'flex'
+            }`}
           >
             {copied ? (
               <Check className="h-3.5 w-3.5 text-[#15803d]" aria-hidden="true" />
@@ -187,7 +189,9 @@ export function DetailDrawer({
             onClick={() => setReportOpen(true)}
             aria-label={t.reportIssue}
             title={t.reportIssue}
-            className="flex h-10 w-10 items-center justify-center rounded-lg text-[#737373] transition hover:bg-[#F5F6F8] hover:text-[#b45309] dark:hover:bg-neutral-900"
+            className={`h-10 w-10 items-center justify-center rounded-lg text-[#737373] transition hover:bg-[#F5F6F8] hover:text-[#b45309] dark:hover:bg-neutral-900 ${
+              sheetState === 'peek' ? 'hidden md:flex' : 'flex'
+            }`}
           >
             <AlertTriangle className="h-4 w-4" aria-hidden="true" />
           </button>
